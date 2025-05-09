@@ -7,11 +7,10 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, X } from "lucide-react"
+import { Search, X, CalendarIcon } from "lucide-react"
 import type { DateRange } from "react-day-picker"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { CalendarIcon } from "@/components/icons"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
@@ -51,16 +50,21 @@ export default function PaymentFilters({ filters, setFilters }: PaymentFiltersPr
         setLoading((prev) => ({ ...prev, tribes: true }))
         console.log("Cargando tribus...")
 
-        const { data, error } = await supabase.from("tribes").select("id, name").order("name")
+        // Consulta directa sin order by para simplificar
+        const { data, error } = await supabase.from("tribes").select("id, name")
 
         if (error) {
           console.error("Error al cargar tribus:", error)
           return
         }
 
+        console.log("Respuesta de tribus:", data)
+
         if (data && data.length > 0) {
           console.log("Tribus cargadas:", data.length)
-          setTribes(data)
+          // Ordenar manualmente por nombre
+          const sortedTribes = [...data].sort((a, b) => a.name.localeCompare(b.name))
+          setTribes(sortedTribes)
         } else {
           console.log("No se encontraron tribus")
         }
@@ -82,11 +86,7 @@ export default function PaymentFilters({ filters, setFilters }: PaymentFiltersPr
           setLoading((prev) => ({ ...prev, rooms: true }))
           console.log("Cargando habitaciones para tribu:", selectedTribe)
 
-          const { data, error } = await supabase
-            .from("rooms")
-            .select("id, room_number")
-            .eq("tribe_id", selectedTribe)
-            .order("room_number")
+          const { data, error } = await supabase.from("rooms").select("id, room_number").eq("tribe_id", selectedTribe)
 
           if (error) {
             console.error("Error al cargar habitaciones:", error)
@@ -95,7 +95,9 @@ export default function PaymentFilters({ filters, setFilters }: PaymentFiltersPr
 
           if (data && data.length > 0) {
             console.log("Habitaciones cargadas:", data.length)
-            setRooms(data)
+            // Ordenar manualmente por número de habitación
+            const sortedRooms = [...data].sort((a, b) => a.room_number.localeCompare(b.room_number))
+            setRooms(sortedRooms)
           } else {
             console.log("No se encontraron habitaciones para esta tribu")
             setRooms([])
@@ -189,6 +191,7 @@ export default function PaymentFilters({ filters, setFilters }: PaymentFiltersPr
               onSelect={handleDateSelect}
               numberOfMonths={2}
               locale={es}
+              weekStartsOn={1} // Comenzar la semana en lunes (1) en lugar de domingo (0)
             />
           </PopoverContent>
         </Popover>

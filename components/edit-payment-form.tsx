@@ -32,29 +32,41 @@ export default function EditPaymentForm({ payment }: EditPaymentFormProps) {
   const router = useRouter()
   const [tribes, setTribes] = useState<Tribe[]>([])
   const [rooms, setRooms] = useState<Room[]>([])
-  const [selectedTribe, setSelectedTribe] = useState<string>(payment.tribe_id.toString())
+  const [selectedTribe, setSelectedTribe] = useState<string>(payment?.tribe_id?.toString() || "")
   const [isLoading, setIsLoading] = useState(false)
-  const [entryDate, setEntryDate] = useState<Date>(new Date(payment.entry_date))
-  const [estimatedDate, setEstimatedDate] = useState<Date>(new Date(payment.estimated_payment_date))
+  const [entryDate, setEntryDate] = useState<Date>(payment?.entry_date ? new Date(payment.entry_date) : new Date())
+  const [estimatedDate, setEstimatedDate] = useState<Date>(
+    payment?.estimated_payment_date ? new Date(payment.estimated_payment_date) : new Date(),
+  )
   const [actualDate, setActualDate] = useState<Date | undefined>(
-    payment.actual_payment_date ? new Date(payment.actual_payment_date) : undefined,
+    payment?.actual_payment_date ? new Date(payment.actual_payment_date) : undefined,
   )
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [documentsToRemove, setDocumentsToRemove] = useState<number[]>([])
+  const [paymentData, setPaymentData] = useState(payment || {})
 
   // Nuevos estados para los importes
   const [rentAmount, setRentAmount] = useState<string>(
-    payment.rent_amount?.toString() || payment.amount?.toString() || "",
+    payment?.rent_amount?.toString() || payment?.amount?.toString() || "",
   )
-  const [servicesAmount, setServicesAmount] = useState<string>(payment.services_amount?.toString() || "")
-  const [totalAmount, setTotalAmount] = useState<string>(payment.amount?.toString() || "")
+  const [servicesAmount, setServicesAmount] = useState<string>(payment?.services_amount?.toString() || "")
+  const [totalAmount, setTotalAmount] = useState<string>(payment?.amount?.toString() || "")
 
   // Cargar las tribus al montar el componente
   useEffect(() => {
     const loadTribes = async () => {
-      const tribesData = await getTribes()
-      setTribes(tribesData)
+      try {
+        const tribesData = await getTribes()
+        setTribes(tribesData)
+      } catch (error) {
+        console.error("Error al cargar tribus:", error)
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar las tribus. Por favor, intente de nuevo.",
+          variant: "destructive",
+        })
+      }
     }
 
     loadTribes()
@@ -64,8 +76,17 @@ export default function EditPaymentForm({ payment }: EditPaymentFormProps) {
   useEffect(() => {
     const loadRooms = async () => {
       if (selectedTribe) {
-        const roomsData = await getRoomsByTribe(Number.parseInt(selectedTribe))
-        setRooms(roomsData)
+        try {
+          const roomsData = await getRoomsByTribe(Number.parseInt(selectedTribe))
+          setRooms(roomsData)
+        } catch (error) {
+          console.error("Error al cargar habitaciones:", error)
+          toast({
+            title: "Error",
+            description: "No se pudieron cargar las habitaciones. Por favor, intente de nuevo.",
+            variant: "destructive",
+          })
+        }
       } else {
         setRooms([])
       }
@@ -200,15 +221,42 @@ export default function EditPaymentForm({ payment }: EditPaymentFormProps) {
     }
   }
 
+  // Verificar si tenemos los datos necesarios
+  if (!payment || !payment.id) {
+    return (
+      <Card className="w-full max-w-3xl mx-auto">
+        <CardHeader className="bg-gradient-to-r from-amber-500 to-orange-600 text-white">
+          <CardTitle className="text-2xl">Error al cargar el cobro</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <Alert variant="destructive">
+            <AlertDescription>
+              No se pudo cargar la información del cobro. Por favor, intente de nuevo o vuelva al listado de cobros.
+            </AlertDescription>
+          </Alert>
+          <div className="mt-4 flex justify-center">
+            <Link href="/payments">
+              <Button>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Volver al listado
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   // Detalles del cobro para mostrar en el diálogo de confirmación
   const paymentDetails = (
     <div className="space-y-2 text-sm">
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <span className="font-semibold">Tribu:</span> {payment.tribes.name}
+          <span className="font-semibold">Tribu:</span> {payment.tribes?.name || `Tribu ${payment.tribe_id}`}
         </div>
         <div>
-          <span className="font-semibold">Habitación:</span> {payment.rooms.room_number}
+          <span className="font-semibold">Habitación:</span>{" "}
+          {payment.rooms?.room_number || `Habitación ${payment.room_id}`}
         </div>
         <div>
           <span className="font-semibold">Importe total:</span> ${Number(payment.amount).toFixed(2)}
@@ -294,6 +342,7 @@ export default function EditPaymentForm({ payment }: EditPaymentFormProps) {
                   onSelect={(date) => date && setEntryDate(date)}
                   initialFocus
                   locale={es}
+                  weekStartsOn={1}
                 />
               </PopoverContent>
             </Popover>
@@ -322,6 +371,7 @@ export default function EditPaymentForm({ payment }: EditPaymentFormProps) {
                   onSelect={(date) => date && setEstimatedDate(date)}
                   initialFocus
                   locale={es}
+                  weekStartsOn={1}
                 />
               </PopoverContent>
             </Popover>
@@ -347,6 +397,7 @@ export default function EditPaymentForm({ payment }: EditPaymentFormProps) {
                   onSelect={(date) => setActualDate(date)}
                   initialFocus
                   locale={es}
+                  weekStartsOn={1}
                 />
               </PopoverContent>
             </Popover>

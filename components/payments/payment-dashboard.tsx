@@ -40,125 +40,32 @@ export default function PaymentDashboard() {
     error: null,
   })
 
-  // Paso 1: Obtener datos básicos
-  const fetchBasicData = async () => {
+  // Paso 1: Obtener datos con joins directamente
+  const fetchPayments = async () => {
     setLoading(true)
     setError(null)
 
     try {
-      console.log("Iniciando consulta básica a la tabla payments")
+      console.log("Iniciando consulta a la tabla payments con joins")
 
-      // Consulta básica sin joins
-      const { data, error } = await supabase.from("payments").select("*").limit(50)
-
-      if (error) {
-        console.error("Error en la consulta básica:", error)
-        setDebugInfo((prev) => ({ ...prev, error: error }))
-        throw error
-      }
-
-      console.log("Datos básicos obtenidos:", data?.length || 0, "registros")
-      setDebugInfo((prev) => ({ ...prev, rawData: data }))
-
-      // Mapear los datos básicos
-      const mappedData = await mapPaymentsData(data || [])
-      setPayments(mappedData)
-      setDebugInfo((prev) => ({ ...prev, mappedData: mappedData }))
-
-      // Calcular resumen
-      calculateSummary(mappedData)
-    } catch (error) {
-      console.error("Error fetching payments:", error)
-      setError(`No se pudieron cargar los cobros: ${error.message || "Error desconocido"}`)
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los cobros. Por favor, intente de nuevo.",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Paso 2: Mapear los datos y obtener nombres de tribus y habitaciones
-  const mapPaymentsData = async (data: any[]) => {
-    if (!data || data.length === 0) return []
-
-    // Obtener IDs únicos de tribus y habitaciones
-    const tribeIds = [...new Set(data.map((item) => item.tribe_id))]
-    const roomIds = [...new Set(data.map((item) => item.room_id))]
-
-    // Obtener datos de tribus
-    const { data: tribesData } = await supabase.from("tribes").select("id, name").in("id", tribeIds)
-
-    // Obtener datos de habitaciones
-    const { data: roomsData } = await supabase.from("rooms").select("id, room_number, tribe_id").in("id", roomIds)
-
-    // Crear mapas para acceso rápido
-    const tribesMap = {}
-    const roomsMap = {}
-
-    if (tribesData) {
-      tribesData.forEach((tribe) => {
-        tribesMap[tribe.id] = tribe.name
-      })
-    }
-
-    if (roomsData) {
-      roomsData.forEach((room) => {
-        roomsMap[room.id] = room.room_number
-      })
-    }
-
-    // Mapear los datos
-    return data.map((item) => ({
-      id: item.id,
-      date: item.entry_date,
-      due_date: item.estimated_payment_date,
-      payment_date: item.actual_payment_date,
-      client: {
-        id: item.tribe_id,
-        name:
-          tribesMap[item.tribe_id] && roomsMap[item.room_id]
-            ? `${tribesMap[item.tribe_id]} - ${roomsMap[item.room_id]}`
-            : `Tribu ${item.tribe_id} - Habitación ${item.room_id}`,
-      },
-      tribe_name: tribesMap[item.tribe_id] || "",
-      room_number: roomsMap[item.room_id] || "",
-      amount: Number.parseFloat(item.amount),
-      rent_amount: Number.parseFloat(item.rent_amount || "0"),
-      services_amount: Number.parseFloat(item.services_amount || "0"),
-      status: item.actual_payment_date ? "paid" : "pending",
-      payment_method: item.payment_method,
-      invoice_number: "",
-      description: item.comments,
-      document_url: item.document_url || (item.document_urls && item.document_urls[0]),
-      document_urls: item.document_urls,
-    }))
-  }
-
-  // Paso 3: Implementar filtros
-  const fetchFilteredData = async () => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      console.log("Iniciando consulta filtrada a la tabla payments")
-
-      // Consulta básica
-      let query = supabase.from("payments").select("*")
+      // Consulta con joins para obtener nombres de tribus y habitaciones directamente
+      let query = supabase.from("payments").select(`
+          *,
+          tribes:tribe_id (id, name),
+          rooms:room_id (id, room_number)
+        `)
 
       // Aplicar filtros de fecha si existen
       if (filters.dateRange?.from) {
         const fromDate = new Date(filters.dateRange.from)
         fromDate.setHours(0, 0, 0, 0)
-        query = query.gte("entry_date", fromDate.toISOString())
+        query = query.gte("entry_date", fromDate.toISOString().split("T")[0])
       }
 
       if (filters.dateRange?.to) {
         const toDate = new Date(filters.dateRange.to)
         toDate.setHours(23, 59, 59, 999)
-        query = query.lte("entry_date", toDate.toISOString())
+        query = query.lte("entry_date", toDate.toISOString().split("T")[0])
       }
 
       // Aplicar filtro de tribu si existe
@@ -190,29 +97,62 @@ export default function PaymentDashboard() {
       query = query.range(from, to)
 
       // Ejecutar la consulta
-      const { data, error, count } = await query.count("exact")
+      const { data, error } = await query
 
       if (error) {
-        console.error("Error en la consulta filtrada:", error)
+        console.error("Error en la consulta:", error)
         setDebugInfo((prev) => ({ ...prev, error: error }))
         throw error
       }
 
-      console.log("Datos filtrados obtenidos:", data?.length || 0, "registros")
+      console.log("Datos obtenidos:", data?.length || 0, "registros")
+      console.log("Muestra de datos:", data?.[0])
       setDebugInfo((prev) => ({ ...prev, rawData: data }))
 
-      // Verificar si hay más páginas
-      setHasMore(count ? count > page * pageSize : false)
-
       // Mapear los datos
-      const mappedData = await mapPaymentsData(data || [])
+      const mappedData = mapPaymentsData(data || [])
       setPayments(mappedData)
       setDebugInfo((prev) => ({ ...prev, mappedData: mappedData }))
 
       // Calcular resumen
       calculateSummary(mappedData)
+
+      // Verificar si hay más páginas (consulta separada para el conteo)
+      const countQuery = supabase.from("payments").select("id", { count: "exact", head: true })
+
+      // Aplicar los mismos filtros a la consulta de conteo
+      if (filters.dateRange?.from) {
+        const fromDate = new Date(filters.dateRange.from)
+        fromDate.setHours(0, 0, 0, 0)
+        countQuery.gte("entry_date", fromDate.toISOString().split("T")[0])
+      }
+
+      if (filters.dateRange?.to) {
+        const toDate = new Date(filters.dateRange.to)
+        toDate.setHours(23, 59, 59, 999)
+        countQuery.lte("entry_date", toDate.toISOString().split("T")[0])
+      }
+
+      if (filters.tribe && filters.tribe !== "all") {
+        countQuery.eq("tribe_id", filters.tribe)
+      }
+
+      if (filters.room && filters.room !== "all") {
+        countQuery.eq("room_id", filters.room)
+      }
+
+      if (filters.paymentMethod && filters.paymentMethod !== "all") {
+        countQuery.eq("payment_method", filters.paymentMethod)
+      }
+
+      if (filters.search) {
+        countQuery.ilike("comments", `%${filters.search}%`)
+      }
+
+      const { count } = await countQuery
+      setHasMore(count ? count > page * pageSize : false)
     } catch (error) {
-      console.error("Error fetching filtered payments:", error)
+      console.error("Error fetching payments:", error)
       setError(`No se pudieron cargar los cobros: ${error.message || "Error desconocido"}`)
       toast({
         title: "Error",
@@ -222,6 +162,36 @@ export default function PaymentDashboard() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Mapear los datos con los nombres de tribus y habitaciones
+  const mapPaymentsData = (data: any[]): Payment[] => {
+    if (!data || data.length === 0) return []
+
+    return data.map((item) => ({
+      id: item.id,
+      date: item.entry_date,
+      due_date: item.estimated_payment_date,
+      payment_date: item.actual_payment_date,
+      client: {
+        id: item.tribe_id,
+        name:
+          item.tribes && item.rooms
+            ? `${item.tribes.name} - ${item.rooms.room_number}`
+            : `Tribu ${item.tribe_id} - Habitación ${item.room_id}`,
+      },
+      tribe_name: item.tribes ? item.tribes.name : "",
+      room_number: item.rooms ? item.rooms.room_number : "",
+      amount: Number.parseFloat(item.amount),
+      rent_amount: Number.parseFloat(item.rent_amount || "0"),
+      services_amount: Number.parseFloat(item.services_amount || "0"),
+      status: item.actual_payment_date ? "paid" : "pending",
+      payment_method: item.payment_method,
+      invoice_number: "",
+      description: item.comments,
+      document_url: item.document_url || (item.document_urls && item.document_urls[0]),
+      document_urls: item.document_urls,
+    }))
   }
 
   const calculateSummary = (data: Payment[]) => {
@@ -248,20 +218,17 @@ export default function PaymentDashboard() {
 
   // Cargar datos iniciales
   useEffect(() => {
-    fetchBasicData()
+    fetchPayments()
   }, [])
 
-  // Cargar datos filtrados cuando cambian los filtros
+  // Cargar datos filtrados cuando cambian los filtros o la página
   useEffect(() => {
-    if (Object.values(filters).some((value) => value !== "" && value !== null)) {
-      fetchFilteredData()
-    }
-  }, [filters])
+    fetchPayments()
+  }, [filters, page])
 
   const loadMorePayments = () => {
     const nextPage = page + 1
     setPage(nextPage)
-    fetchFilteredData()
   }
 
   return (
@@ -270,7 +237,15 @@ export default function PaymentDashboard() {
         <PaymentFilters filters={filters} setFilters={setFilters} />
 
         <div className="flex gap-2 ml-auto">
-          <Button variant="outline" size="sm" onClick={fetchBasicData} disabled={loading}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setPage(1)
+              fetchPayments()
+            }}
+            disabled={loading}
+          >
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
             Actualizar
           </Button>
