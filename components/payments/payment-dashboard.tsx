@@ -23,9 +23,6 @@ export default function PaymentDashboard() {
     paymentMethod: "",
     search: "",
   })
-  const [page, setPage] = useState(1)
-  const [hasMore, setHasMore] = useState(false)
-  const pageSize = 50
   const supabase = createClientComponentClient()
   const { toast } = useToast()
   const [summary, setSummary] = useState({
@@ -267,6 +264,15 @@ export default function PaymentDashboard() {
       // Consulta básica
       let query = supabase.from("payments").select("*")
 
+      // Verificar si hay algún filtro aplicado
+      const hasFilters =
+        filters.dateRange?.from ||
+        filters.dateRange?.to ||
+        (filters.tribe && filters.tribe !== "all") ||
+        (filters.room && filters.room !== "all") ||
+        (filters.paymentMethod && filters.paymentMethod !== "all") ||
+        filters.search
+
       // Aplicar filtros de fecha si existen
       if (filters.dateRange?.from) {
         const fromDate = new Date(filters.dateRange.from)
@@ -303,10 +309,10 @@ export default function PaymentDashboard() {
       // Ordenar por fecha de entrada (más reciente primero)
       query = query.order("entry_date", { ascending: false })
 
-      // Aplicar paginación
-      const from = (page - 1) * pageSize
-      const to = from + pageSize - 1
-      query = query.range(from, to)
+      // Limitar resultados solo si no hay filtros aplicados
+      if (!hasFilters) {
+        query = query.limit(100) // Mostrar los últimos 100 registros si no hay filtros
+      }
 
       // Ejecutar la consulta
       const { data, error } = await query
@@ -327,41 +333,6 @@ export default function PaymentDashboard() {
 
       // Calcular resumen
       calculateSummary(mappedData)
-
-      // Verificar si hay más páginas (consulta separada para el conteo)
-      const countQuery = supabase.from("payments").select("id", { count: "exact", head: true })
-
-      // Aplicar los mismos filtros a la consulta de conteo
-      if (filters.dateRange?.from) {
-        const fromDate = new Date(filters.dateRange.from)
-        fromDate.setHours(0, 0, 0, 0)
-        countQuery.gte("entry_date", fromDate.toISOString().split("T")[0])
-      }
-
-      if (filters.dateRange?.to) {
-        const toDate = new Date(filters.dateRange.to)
-        toDate.setHours(23, 59, 59, 999)
-        countQuery.lte("entry_date", toDate.toISOString().split("T")[0])
-      }
-
-      if (filters.tribe && filters.tribe !== "all") {
-        countQuery.eq("tribe_id", filters.tribe)
-      }
-
-      if (filters.room && filters.room !== "all") {
-        countQuery.eq("room_id", filters.room)
-      }
-
-      if (filters.paymentMethod && filters.paymentMethod !== "all") {
-        countQuery.eq("payment_method", filters.paymentMethod)
-      }
-
-      if (filters.search) {
-        countQuery.ilike("comments", `%${filters.search}%`)
-      }
-
-      const { count } = await countQuery
-      setHasMore(count ? count > page * pageSize : false)
     } catch (error) {
       console.error("Error fetching payments:", error)
       setError(`No se pudieron cargar los cobros: ${error.message || "Error desconocido"}`)
@@ -438,15 +409,10 @@ export default function PaymentDashboard() {
     fetchPayments()
   }, [])
 
-  // Cargar datos filtrados cuando cambian los filtros o la página
+  // Cargar datos filtrados cuando cambian los filtros
   useEffect(() => {
     fetchPayments()
-  }, [filters, page])
-
-  const loadMorePayments = () => {
-    const nextPage = page + 1
-    setPage(nextPage)
-  }
+  }, [filters])
 
   return (
     <div className="space-y-6">
@@ -454,15 +420,7 @@ export default function PaymentDashboard() {
         <PaymentFilters filters={filters} setFilters={setFilters} />
 
         <div className="flex gap-2 ml-auto">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setPage(1)
-              fetchPayments()
-            }}
-            disabled={loading}
-          >
+          <Button variant="outline" size="sm" onClick={fetchPayments} disabled={loading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
             Actualizar
           </Button>
@@ -498,21 +456,6 @@ export default function PaymentDashboard() {
       )}
 
       <PaymentTable payments={payments} loading={loading} />
-
-      {hasMore && (
-        <div className="flex justify-center mt-4">
-          <Button onClick={loadMorePayments} disabled={loading} variant="outline">
-            {loading ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Cargando...
-              </>
-            ) : (
-              "Cargar más registros"
-            )}
-          </Button>
-        </div>
-      )}
 
       {/* Panel de depuración */}
       <div className="mt-8 p-4 border rounded-md bg-gray-50 text-xs">
