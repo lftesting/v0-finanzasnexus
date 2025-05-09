@@ -8,7 +8,8 @@ import { Loader2, AlertCircle, RefreshCw } from "lucide-react"
 import { useAuth } from "@/context/auth-context"
 
 export function AuthDebugPanel() {
-  const { user, session, refreshSession } = useAuth()
+  // No renderizar nada en producción
+  const { user, session, refreshSession } = useAuth() // Moved hook call outside conditional
   const [serverAuthInfo, setServerAuthInfo] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,6 +61,10 @@ export function AuthDebugPanel() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    return null
   }
 
   if (!showPanel) {
