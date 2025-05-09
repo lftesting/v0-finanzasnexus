@@ -42,58 +42,211 @@ export default function PaymentDashboard() {
     roomsMap: null,
   })
 
-  // Obtener datos de tribus y habitaciones para mapeo
-  const fetchTribesAndRooms = async () => {
+  // Función para cargar tribus con manejo robusto de errores
+  const loadTribes = async () => {
     try {
-      // Obtener todas las tribus
-      const { data: tribesData, error: tribesError } = await supabase.from("tribes").select("id, name")
+      console.log("Cargando tribus...")
 
-      if (tribesError) {
-        console.error("Error al obtener tribus:", tribesError)
-        return { tribesMap: {}, roomsMap: {} }
+      // Primera consulta - intentar obtener todas las columnas
+      let { data, error } = await supabase.from("tribes").select("*")
+
+      if (error) {
+        console.error(`Error en primera consulta de tribus: ${error.message}`)
+
+        // Segunda consulta - intentar solo con id y name
+        const result = await supabase.from("tribes").select("id, name")
+        data = result.data
+        error = result.error
+
+        if (error) {
+          console.error(`Error en segunda consulta de tribus: ${error.message}`)
+          throw error
+        }
       }
 
-      // Obtener todas las habitaciones
-      const { data: roomsData, error: roomsError } = await supabase.from("rooms").select("id, room_number, tribe_id")
+      if (!data || data.length === 0) {
+        console.log("No se encontraron tribus en la base de datos")
 
-      if (roomsError) {
-        console.error("Error al obtener habitaciones:", roomsError)
-        return { tribesMap: {}, roomsMap: {} }
+        // Crear un mapa predeterminado para evitar errores
+        const defaultMap = {
+          1: "Rancho",
+          2: "Hostel",
+          3: "Cueva",
+          4: "Chateau",
+          5: "Catedral",
+          6: "Estacion",
+          7: "Office",
+          8: "Jardin",
+        }
+
+        console.log(`Usando mapa de tribus predeterminado con ${Object.keys(defaultMap).length} entradas`)
+        return defaultMap
       }
 
-      // Crear mapas para acceso rápido
-      const tribesMap = {}
-      const roomsMap = {}
+      console.log(`Tribus cargadas: ${data.length}`)
 
-      if (tribesData) {
-        tribesData.forEach((tribe) => {
-          tribesMap[tribe.id] = tribe.name
-        })
+      // Crear mapa de tribus
+      const map = {}
+      data.forEach((tribe) => {
+        // Asegurarse de que name existe y no es null
+        const tribeName = tribe.name ? tribe.name.trim() : `Tribu ${tribe.id}`
+        map[tribe.id] = tribeName
+      })
+
+      return map
+    } catch (err) {
+      console.error(`Error al cargar tribus: ${err.message}`)
+
+      // Crear un mapa predeterminado como último recurso
+      const fallbackMap = {
+        1: "Rancho",
+        2: "Hostel",
+        3: "Cueva",
+        4: "Chateau",
+        5: "Catedral",
+        6: "Estacion",
+        7: "Office",
+        8: "Jardin",
       }
 
-      if (roomsData) {
-        roomsData.forEach((room) => {
-          roomsMap[room.id] = room.room_number
-        })
-      }
-
-      console.log("Mapa de tribus:", tribesMap)
-      console.log("Mapa de habitaciones:", roomsMap)
-
-      setDebugInfo((prev) => ({
-        ...prev,
-        tribesMap,
-        roomsMap,
-      }))
-
-      return { tribesMap, roomsMap }
-    } catch (error) {
-      console.error("Error al obtener tribus y habitaciones:", error)
-      return { tribesMap: {}, roomsMap: {} }
+      console.log(`FALLBACK: Usando mapa de tribus predeterminado con ${Object.keys(fallbackMap).length} entradas`)
+      return fallbackMap
     }
   }
 
-  // Obtener pagos
+  // Función para cargar habitaciones con manejo robusto de errores
+  const loadRooms = async () => {
+    try {
+      console.log("Cargando habitaciones...")
+
+      // Primera consulta - intentar obtener todas las columnas
+      let { data, error } = await supabase.from("rooms").select("*")
+
+      if (error) {
+        console.error(`Error en primera consulta de habitaciones: ${error.message}`)
+
+        // Segunda consulta - intentar solo con id y room_number
+        const result = await supabase.from("rooms").select("id, room_number, tribe_id")
+        data = result.data
+        error = result.error
+
+        if (error) {
+          console.error(`Error en segunda consulta de habitaciones: ${error.message}`)
+          throw error
+        }
+      }
+
+      if (!data || data.length === 0) {
+        console.log("No se encontraron habitaciones en la base de datos")
+
+        // Crear un mapa predeterminado para evitar errores
+        const defaultMap = {}
+        // Generar algunas habitaciones predeterminadas para cada tribu
+        for (let tribeId = 1; tribeId <= 8; tribeId++) {
+          for (let roomNum = 1; roomNum <= 5; roomNum++) {
+            const roomId = (tribeId - 1) * 5 + roomNum
+            let prefix = ""
+
+            switch (tribeId) {
+              case 1:
+                prefix = "R"
+                break
+              case 2:
+                prefix = "H"
+                break
+              case 3:
+                prefix = "C"
+                break
+              case 4:
+                prefix = "CH"
+                break
+              case 5:
+                prefix = "CAT"
+                break
+              case 6:
+                prefix = "E"
+                break
+              case 7:
+                prefix = "O"
+                break
+              case 8:
+                prefix = "J"
+                break
+              default:
+                prefix = "X"
+            }
+
+            defaultMap[roomId] = `${prefix}${roomNum}`
+          }
+        }
+
+        console.log(`Usando mapa de habitaciones predeterminado con ${Object.keys(defaultMap).length} entradas`)
+        return defaultMap
+      }
+
+      console.log(`Habitaciones cargadas: ${data.length}`)
+
+      // Crear mapa de habitaciones
+      const map = {}
+      data.forEach((room) => {
+        // Asegurarse de que room_number existe y no es null
+        const roomNumber = room.room_number ? room.room_number.trim() : `Hab ${room.id}`
+        map[room.id] = roomNumber
+      })
+
+      return map
+    } catch (err) {
+      console.error(`Error al cargar habitaciones: ${err.message}`)
+
+      // Crear un mapa predeterminado como último recurso
+      const fallbackMap = {}
+      // Generar algunas habitaciones predeterminadas para cada tribu
+      for (let tribeId = 1; tribeId <= 8; tribeId++) {
+        for (let roomNum = 1; roomNum <= 5; roomNum++) {
+          const roomId = (tribeId - 1) * 5 + roomNum
+          let prefix = ""
+
+          switch (tribeId) {
+            case 1:
+              prefix = "R"
+              break
+            case 2:
+              prefix = "H"
+              break
+            case 3:
+              prefix = "C"
+              break
+            case 4:
+              prefix = "CH"
+              break
+            case 5:
+              prefix = "CAT"
+              break
+            case 6:
+              prefix = "E"
+              break
+            case 7:
+              prefix = "O"
+              break
+            case 8:
+              prefix = "J"
+              break
+            default:
+              prefix = "X"
+          }
+
+          fallbackMap[roomId] = `${prefix}${roomNum}`
+        }
+      }
+
+      console.log(
+        `FALLBACK: Usando mapa de habitaciones predeterminado con ${Object.keys(fallbackMap).length} entradas`,
+      )
+      return fallbackMap
+    }
+  }
+
+  // Obtener pagos con filtros
   const fetchPayments = async () => {
     setLoading(true)
     setError(null)
@@ -102,7 +255,14 @@ export default function PaymentDashboard() {
       console.log("Iniciando consulta a la tabla payments")
 
       // Obtener mapas de tribus y habitaciones primero
-      const { tribesMap, roomsMap } = await fetchTribesAndRooms()
+      const tribesMap = await loadTribes()
+      const roomsMap = await loadRooms()
+
+      setDebugInfo((prev) => ({
+        ...prev,
+        tribesMap,
+        roomsMap,
+      }))
 
       // Consulta básica
       let query = supabase.from("payments").select("*")
@@ -158,7 +318,6 @@ export default function PaymentDashboard() {
       }
 
       console.log("Datos obtenidos:", data?.length || 0, "registros")
-      console.log("Muestra de datos:", data?.[0])
       setDebugInfo((prev) => ({ ...prev, rawData: data }))
 
       // Mapear los datos usando los mapas de tribus y habitaciones
