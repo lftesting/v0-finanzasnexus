@@ -38,22 +38,74 @@ export default function PaymentDashboard() {
     rawData: null,
     mappedData: null,
     error: null,
+    tribesMap: null,
+    roomsMap: null,
   })
 
-  // Paso 1: Obtener datos con joins directamente
+  // Obtener datos de tribus y habitaciones para mapeo
+  const fetchTribesAndRooms = async () => {
+    try {
+      // Obtener todas las tribus
+      const { data: tribesData, error: tribesError } = await supabase.from("tribes").select("id, name")
+
+      if (tribesError) {
+        console.error("Error al obtener tribus:", tribesError)
+        return { tribesMap: {}, roomsMap: {} }
+      }
+
+      // Obtener todas las habitaciones
+      const { data: roomsData, error: roomsError } = await supabase.from("rooms").select("id, room_number, tribe_id")
+
+      if (roomsError) {
+        console.error("Error al obtener habitaciones:", roomsError)
+        return { tribesMap: {}, roomsMap: {} }
+      }
+
+      // Crear mapas para acceso rápido
+      const tribesMap = {}
+      const roomsMap = {}
+
+      if (tribesData) {
+        tribesData.forEach((tribe) => {
+          tribesMap[tribe.id] = tribe.name
+        })
+      }
+
+      if (roomsData) {
+        roomsData.forEach((room) => {
+          roomsMap[room.id] = room.room_number
+        })
+      }
+
+      console.log("Mapa de tribus:", tribesMap)
+      console.log("Mapa de habitaciones:", roomsMap)
+
+      setDebugInfo((prev) => ({
+        ...prev,
+        tribesMap,
+        roomsMap,
+      }))
+
+      return { tribesMap, roomsMap }
+    } catch (error) {
+      console.error("Error al obtener tribus y habitaciones:", error)
+      return { tribesMap: {}, roomsMap: {} }
+    }
+  }
+
+  // Obtener pagos
   const fetchPayments = async () => {
     setLoading(true)
     setError(null)
 
     try {
-      console.log("Iniciando consulta a la tabla payments con joins")
+      console.log("Iniciando consulta a la tabla payments")
 
-      // Consulta con joins para obtener nombres de tribus y habitaciones directamente
-      let query = supabase.from("payments").select(`
-          *,
-          tribes:tribe_id (id, name),
-          rooms:room_id (id, room_number)
-        `)
+      // Obtener mapas de tribus y habitaciones primero
+      const { tribesMap, roomsMap } = await fetchTribesAndRooms()
+
+      // Consulta básica
+      let query = supabase.from("payments").select("*")
 
       // Aplicar filtros de fecha si existen
       if (filters.dateRange?.from) {
@@ -109,8 +161,8 @@ export default function PaymentDashboard() {
       console.log("Muestra de datos:", data?.[0])
       setDebugInfo((prev) => ({ ...prev, rawData: data }))
 
-      // Mapear los datos
-      const mappedData = mapPaymentsData(data || [])
+      // Mapear los datos usando los mapas de tribus y habitaciones
+      const mappedData = mapPaymentsData(data || [], tribesMap, roomsMap)
       setPayments(mappedData)
       setDebugInfo((prev) => ({ ...prev, mappedData: mappedData }))
 
@@ -165,33 +217,39 @@ export default function PaymentDashboard() {
   }
 
   // Mapear los datos con los nombres de tribus y habitaciones
-  const mapPaymentsData = (data: any[]): Payment[] => {
+  const mapPaymentsData = (
+    data: any[],
+    tribesMap: Record<string, string>,
+    roomsMap: Record<string, string>,
+  ): Payment[] => {
     if (!data || data.length === 0) return []
 
-    return data.map((item) => ({
-      id: item.id,
-      date: item.entry_date,
-      due_date: item.estimated_payment_date,
-      payment_date: item.actual_payment_date,
-      client: {
-        id: item.tribe_id,
-        name:
-          item.tribes && item.rooms
-            ? `${item.tribes.name} - ${item.rooms.room_number}`
-            : `Tribu ${item.tribe_id} - Habitación ${item.room_id}`,
-      },
-      tribe_name: item.tribes ? item.tribes.name : "",
-      room_number: item.rooms ? item.rooms.room_number : "",
-      amount: Number.parseFloat(item.amount),
-      rent_amount: Number.parseFloat(item.rent_amount || "0"),
-      services_amount: Number.parseFloat(item.services_amount || "0"),
-      status: item.actual_payment_date ? "paid" : "pending",
-      payment_method: item.payment_method,
-      invoice_number: "",
-      description: item.comments,
-      document_url: item.document_url || (item.document_urls && item.document_urls[0]),
-      document_urls: item.document_urls,
-    }))
+    return data.map((item) => {
+      const tribeName = tribesMap[item.tribe_id] || `Tribu ${item.tribe_id}`
+      const roomNumber = roomsMap[item.room_id] || `Habitación ${item.room_id}`
+
+      return {
+        id: item.id,
+        date: item.entry_date,
+        due_date: item.estimated_payment_date,
+        payment_date: item.actual_payment_date,
+        client: {
+          id: item.tribe_id,
+          name: `${tribeName} - ${roomNumber}`,
+        },
+        tribe_name: tribeName,
+        room_number: roomNumber,
+        amount: Number.parseFloat(item.amount),
+        rent_amount: Number.parseFloat(item.rent_amount || "0"),
+        services_amount: Number.parseFloat(item.services_amount || "0"),
+        status: item.actual_payment_date ? "paid" : "pending",
+        payment_method: item.payment_method,
+        invoice_number: "",
+        description: item.comments,
+        document_url: item.document_url || (item.document_urls && item.document_urls[0]),
+        document_urls: item.document_urls,
+      }
+    })
   }
 
   const calculateSummary = (data: Payment[]) => {
@@ -317,6 +375,14 @@ export default function PaymentDashboard() {
             {debugInfo.mappedData
               ? JSON.stringify(debugInfo.mappedData.slice(0, 2), null, 2)
               : "No hay datos disponibles"}
+          </pre>
+        </details>
+
+        <details>
+          <summary className="cursor-pointer font-medium">Ver mapas de tribus y habitaciones</summary>
+          <pre className="mt-2 p-2 bg-gray-100 overflow-auto max-h-40">
+            Tribus: {JSON.stringify(debugInfo.tribesMap, null, 2)}
+            Habitaciones: {JSON.stringify(debugInfo.roomsMap, null, 2)}
           </pre>
         </details>
       </div>

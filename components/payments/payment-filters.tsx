@@ -41,6 +41,7 @@ export default function PaymentFilters({ filters, setFilters }: PaymentFiltersPr
     tribes: false,
     rooms: false,
   })
+  const [tribesError, setTribesError] = useState<string | null>(null)
   const supabase = createClientComponentClient()
 
   // Cargar tribus al montar el componente
@@ -48,13 +49,15 @@ export default function PaymentFilters({ filters, setFilters }: PaymentFiltersPr
     const fetchTribes = async () => {
       try {
         setLoading((prev) => ({ ...prev, tribes: true }))
+        setTribesError(null)
         console.log("Cargando tribus...")
 
-        // Consulta directa sin order by para simplificar
+        // Consulta directa sin filtros ni order by
         const { data, error } = await supabase.from("tribes").select("id, name")
 
         if (error) {
           console.error("Error al cargar tribus:", error)
+          setTribesError(error.message)
           return
         }
 
@@ -67,9 +70,16 @@ export default function PaymentFilters({ filters, setFilters }: PaymentFiltersPr
           setTribes(sortedTribes)
         } else {
           console.log("No se encontraron tribus")
+          setTribesError("No se encontraron tribus en la base de datos")
+
+          // Intentar una consulta más básica para verificar si hay datos
+          const { data: basicData, error: basicError } = await supabase.from("tribes").select("*").limit(5)
+
+          console.log("Consulta básica de tribus:", basicData, basicError)
         }
       } catch (err) {
         console.error("Error en fetchTribes:", err)
+        setTribesError(err.message || "Error desconocido al cargar tribus")
       } finally {
         setLoading((prev) => ({ ...prev, tribes: false }))
       }
@@ -213,9 +223,12 @@ export default function PaymentFilters({ filters, setFilters }: PaymentFiltersPr
                 </SelectItem>
               ))
             ) : (
-              <SelectItem value="no-data" disabled>
-                No hay tribus disponibles
-              </SelectItem>
+              <>
+                <SelectItem value="no-data" disabled>
+                  No hay tribus disponibles
+                </SelectItem>
+                {tribesError && <div className="px-2 py-1 text-xs text-red-500">Error: {tribesError}</div>}
+              </>
             )}
           </SelectContent>
         </Select>
