@@ -38,26 +38,39 @@ export default function PaymentFilters({ filters, setFilters }: PaymentFiltersPr
   const [tribes, setTribes] = useState<any[]>([])
   const [rooms, setRooms] = useState<any[]>([])
   const [selectedTribe, setSelectedTribe] = useState<string>(filters.tribe || "")
+  const [loading, setLoading] = useState({
+    tribes: false,
+    rooms: false,
+  })
   const supabase = createClientComponentClient()
 
   // Cargar tribus al montar el componente
   useEffect(() => {
     const fetchTribes = async () => {
       try {
+        setLoading((prev) => ({ ...prev, tribes: true }))
         console.log("Cargando tribus...")
+
         const { data, error } = await supabase.from("tribes").select("id, name").order("name")
+
         if (error) {
           console.error("Error al cargar tribus:", error)
           return
         }
-        if (data) {
+
+        if (data && data.length > 0) {
           console.log("Tribus cargadas:", data.length)
           setTribes(data)
+        } else {
+          console.log("No se encontraron tribus")
         }
       } catch (err) {
         console.error("Error en fetchTribes:", err)
+      } finally {
+        setLoading((prev) => ({ ...prev, tribes: false }))
       }
     }
+
     fetchTribes()
   }, [])
 
@@ -66,7 +79,9 @@ export default function PaymentFilters({ filters, setFilters }: PaymentFiltersPr
     const fetchRooms = async () => {
       try {
         if (selectedTribe && selectedTribe !== "all") {
+          setLoading((prev) => ({ ...prev, rooms: true }))
           console.log("Cargando habitaciones para tribu:", selectedTribe)
+
           const { data, error } = await supabase
             .from("rooms")
             .select("id, room_number")
@@ -78,17 +93,23 @@ export default function PaymentFilters({ filters, setFilters }: PaymentFiltersPr
             return
           }
 
-          if (data) {
+          if (data && data.length > 0) {
             console.log("Habitaciones cargadas:", data.length)
             setRooms(data)
+          } else {
+            console.log("No se encontraron habitaciones para esta tribu")
+            setRooms([])
           }
         } else {
           setRooms([])
         }
       } catch (err) {
         console.error("Error en fetchRooms:", err)
+      } finally {
+        setLoading((prev) => ({ ...prev, rooms: false }))
       }
     }
+
     fetchRooms()
   }, [selectedTribe])
 
@@ -178,11 +199,21 @@ export default function PaymentFilters({ filters, setFilters }: PaymentFiltersPr
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas las tribus</SelectItem>
-            {tribes.map((tribe) => (
-              <SelectItem key={tribe.id} value={tribe.id.toString()}>
-                {tribe.name}
+            {loading.tribes ? (
+              <SelectItem value="loading" disabled>
+                Cargando tribus...
               </SelectItem>
-            ))}
+            ) : tribes.length > 0 ? (
+              tribes.map((tribe) => (
+                <SelectItem key={tribe.id} value={tribe.id.toString()}>
+                  {tribe.name}
+                </SelectItem>
+              ))
+            ) : (
+              <SelectItem value="no-data" disabled>
+                No hay tribus disponibles
+              </SelectItem>
+            )}
           </SelectContent>
         </Select>
 
@@ -192,11 +223,21 @@ export default function PaymentFilters({ filters, setFilters }: PaymentFiltersPr
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas las habitaciones</SelectItem>
-            {rooms.map((room) => (
-              <SelectItem key={room.id} value={room.id.toString()}>
-                {room.room_number}
+            {loading.rooms ? (
+              <SelectItem value="loading" disabled>
+                Cargando habitaciones...
               </SelectItem>
-            ))}
+            ) : rooms.length > 0 ? (
+              rooms.map((room) => (
+                <SelectItem key={room.id} value={room.id.toString()}>
+                  {room.room_number}
+                </SelectItem>
+              ))
+            ) : (
+              <SelectItem value="no-data" disabled>
+                No hay habitaciones disponibles
+              </SelectItem>
+            )}
           </SelectContent>
         </Select>
 

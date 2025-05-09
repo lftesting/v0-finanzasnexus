@@ -40,27 +40,24 @@ export default function PaymentDashboard() {
     rawData: null,
   })
 
-  // Función simplificada para obtener pagos
   const fetchPayments = async (pageNumber = 1) => {
     setLoading(true)
     setError(null)
 
     try {
-      console.log("Iniciando consulta simplificada a la tabla payments")
+      console.log("Iniciando consulta a la tabla payments con filtros:", filters)
 
-      // Consulta directa sin filtros para verificar si podemos obtener datos
-      const { data, error, count } = await supabase
-        .from("payments")
-        .select(
-          `
+      // Consulta básica
+      let query = supabase.from("payments").select(
+        `
           id, 
           entry_date, 
           estimated_payment_date, 
           actual_payment_date, 
           tribe_id, 
-          tribes:tribes(name), 
+          tribes:tribes(id, name), 
           room_id, 
-          rooms:rooms(room_number), 
+          rooms:rooms(id, room_number), 
           amount, 
           rent_amount, 
           services_amount, 
@@ -69,10 +66,57 @@ export default function PaymentDashboard() {
           document_url, 
           document_urls
         `,
-          { count: "exact" },
+        { count: "exact" },
+      )
+
+      // Aplicar filtros de fecha si existen
+      if (filters.dateRange?.from) {
+        const fromDate = new Date(filters.dateRange.from)
+        fromDate.setHours(0, 0, 0, 0)
+        query = query.gte("entry_date", fromDate.toISOString())
+      }
+
+      if (filters.dateRange?.to) {
+        const toDate = new Date(filters.dateRange.to)
+        toDate.setHours(23, 59, 59, 999)
+        query = query.lte("entry_date", toDate.toISOString())
+      }
+
+      // Aplicar filtro de tribu si existe y no es "all"
+      if (filters.tribe && filters.tribe !== "all") {
+        query = query.eq("tribe_id", filters.tribe)
+      }
+
+      // Aplicar filtro de habitación si existe y no es "all"
+      if (filters.room && filters.room !== "all") {
+        query = query.eq("room_id", filters.room)
+      }
+
+      // Aplicar filtro de método de pago si existe y no es "all"
+      if (filters.paymentMethod && filters.paymentMethod !== "all") {
+        query = query.eq("payment_method", filters.paymentMethod)
+      }
+
+      // Aplicar filtro de búsqueda si existe
+      if (filters.search) {
+        query = query.or(
+          `comments.ilike.%${filters.search}%,tribes.name.ilike.%${filters.search}%,rooms.room_number.ilike.%${filters.search}%`,
         )
-        .order("entry_date", { ascending: false })
-        .range(0, 49) // Obtener los primeros 50 registros
+      }
+
+      // Ordenar por fecha de entrada (más reciente primero)
+      query = query.order("entry_date", { ascending: false })
+
+      // Aplicar paginación
+      const from = (pageNumber - 1) * pageSize
+      const to = from + pageSize - 1
+      query = query.range(from, to)
+
+      console.log("Ejecutando consulta a Supabase...")
+      setDebugInfo((prev) => ({ ...prev, query: JSON.stringify(query) }))
+
+      // Ejecutar la consulta
+      const { data, error, count } = await query.count("exact")
 
       if (error) {
         console.error("Error en la consulta:", error)
@@ -81,9 +125,13 @@ export default function PaymentDashboard() {
       }
 
       console.log("Datos obtenidos:", data?.length || 0, "registros")
+      console.log("Total de registros:", count)
       console.log("Primer registro:", data?.[0])
 
       setDebugInfo((prev) => ({ ...prev, rawData: data }))
+
+      // Verificar si hay más páginas
+      setHasMore(count ? count > pageNumber * pageSize : false)
 
       // Mapear los datos al formato esperado por el componente
       const mappedData =
@@ -152,9 +200,16 @@ export default function PaymentDashboard() {
   }
 
   useEffect(() => {
-    // Cargar pagos al montar el componente
-    fetchPayments()
-  }, [])
+    // Cargar pagos cuando cambian los filtros
+    setPage(1)
+    fetchPayments(1)
+  }, [filters])
+
+  const loadMorePayments = () => {
+    const nextPage = page + 1
+    setPage(nextPage)
+    fetchPayments(nextPage)
+  }
 
   return (
     <div className="space-y-6">
@@ -198,6 +253,21 @@ export default function PaymentDashboard() {
       )}
 
       <PaymentTable payments={payments} loading={loading} />
+
+      {hasMore && (
+        <div className="flex justify-center mt-4">
+          <Button onClick={loadMorePayments} disabled={loading} variant="outline">
+            {loading ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                Cargando...
+              </>
+            ) : (
+              "Cargar más registros"
+            )}
+          </Button>
+        </div>
+      )}
 
       {/* Panel de depuración mejorado */}
       <div className="mt-8 p-4 border rounded-md bg-gray-50 text-xs">
