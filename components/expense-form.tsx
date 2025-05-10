@@ -168,19 +168,25 @@ export default function ExpenseForm() {
   }
 
   const handleSupplierAdded = (supplier: { id: number; name: string }) => {
+    console.log("Proveedor añadido:", supplier)
+
     // Añadir el nuevo proveedor a la lista
     setSuppliers((prev) => {
       // Verificar si el proveedor ya existe en la lista
       const exists = prev.some((p) => p.id === supplier.id)
       if (exists) {
+        console.log("El proveedor ya existe en la lista")
         return prev
       }
       // Ordenar la lista alfabéticamente después de agregar el nuevo proveedor
-      return [...prev, supplier as Supplier].sort((a, b) => a.name.localeCompare(b.name))
+      const updatedSuppliers = [...prev, supplier as Supplier].sort((a, b) => a.name.localeCompare(b.name))
+      console.log("Lista actualizada de proveedores:", updatedSuppliers)
+      return updatedSuppliers
     })
 
     // Seleccionar automáticamente el nuevo proveedor
     setSelectedSupplierId(supplier.id.toString())
+    console.log("Proveedor seleccionado:", supplier.id.toString())
 
     // Mostrar un mensaje de confirmación
     toast({

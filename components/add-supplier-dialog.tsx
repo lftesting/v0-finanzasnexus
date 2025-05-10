@@ -70,14 +70,26 @@ export function AddSupplierDialog({ onSupplierAdded }: AddSupplierDialogProps) {
         email: email || null,
       })
 
+      console.log("Resultado de createSupplier:", result)
+
       if (result.success) {
         toast({
           title: "Proveedor creado",
           description: "El proveedor ha sido creado exitosamente.",
         })
-        onSupplierAdded(result.data)
-        setOpen(false)
-        resetForm()
+        // Asegurarse de que result.data existe antes de llamar a onSupplierAdded
+        if (result.data) {
+          onSupplierAdded(result.data)
+          setOpen(false)
+          resetForm()
+        } else {
+          console.error("Error: No se recibieron datos del proveedor creado")
+          toast({
+            title: "Error",
+            description: "Se creó el proveedor pero hubo un problema al seleccionarlo.",
+            variant: "destructive",
+          })
+        }
       } else {
         toast({
           title: "Error",

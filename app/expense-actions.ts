@@ -537,6 +537,13 @@ export async function createSupplier(supplierData: {
     return { success: false, error: error.message }
   }
 
+  // Asegurarse de que data existe y tiene al menos un elemento
+  if (!data || data.length === 0) {
+    console.error("No se recibieron datos después de insertar el proveedor")
+    return { success: false, error: "Error al crear el proveedor: no se recibieron datos" }
+  }
+
+  console.log("Proveedor creado exitosamente:", data[0])
   return { success: true, data: data[0] }
 }
 
