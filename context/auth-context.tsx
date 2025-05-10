@@ -28,11 +28,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Usar useRef para mantener una referencia estable al cliente de Supabase
-  const supabaseRef = useRef(createClientSupabaseClient())
+  // Inicializar Supabase solo en el cliente
+  const supabaseRef = useRef(typeof window !== "undefined" ? createClientSupabaseClient() : null)
+
+  // Asegurarse de que supabase esté disponible antes de usarlo
+  useEffect(() => {
+    // Inicializar supabase si aún no se ha hecho
+    if (!supabaseRef.current && typeof window !== "undefined") {
+      supabaseRef.current = createClientSupabaseClient()
+    }
+  }, [])
+
   const supabase = supabaseRef.current
 
   const refreshSession = async () => {
+    if (!supabase) return
+
     setIsLoading(true)
     try {
       // Obtener la sesión actual
@@ -59,6 +70,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
+    if (!supabase) return
+
     const getSession = async () => {
       setIsLoading(true)
       try {
@@ -87,21 +100,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     getSession()
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      console.log("Cambio en el estado de autenticación:", _event)
-      setSession(session)
-      setUser(session?.user || null)
-      setIsLoading(false)
-    })
+    // Solo configurar el listener si supabase está disponible
+    let subscription: { unsubscribe: () => void } | null = null
+
+    if (supabase) {
+      const authListener = supabase.auth.onAuthStateChange(async (_event, session) => {
+        console.log("Cambio en el estado de autenticación:", _event)
+        setSession(session)
+        setUser(session?.user || null)
+        setIsLoading(false)
+      })
+
+      subscription = authListener.data.subscription
+    }
 
     return () => {
-      subscription.unsubscribe()
+      if (subscription) {
+        subscription.unsubscribe()
+      }
     }
   }, [supabase])
 
   const signIn = async (email: string, password: string) => {
+    if (!supabase) {
+      console.error("No se puede iniciar sesión: Supabase no está disponible")
+      return { error: new Error("Supabase no está disponible"), success: false }
+    }
+
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -127,6 +152,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
+    if (!supabase) return
+
     try {
       await supabase.auth.signOut()
       setSession(null)

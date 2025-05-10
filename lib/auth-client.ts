@@ -2,8 +2,21 @@
 
 import { createClientSupabaseClient } from "@/lib/supabase"
 
-// Crear una referencia al cliente de Supabase
+// Función para obtener el cliente de Supabase solo en el navegador
 const getSupabaseClient = () => {
+  if (typeof window === "undefined") {
+    console.warn("Intentando usar getSupabaseClient en el servidor")
+    // Devolver un cliente simulado para evitar errores
+    // @ts-ignore
+    return {
+      auth: {
+        getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+        signInWithPassword: () => Promise.resolve({ data: { user: null, session: null }, error: null }),
+        signOut: () => Promise.resolve({ error: null }),
+      },
+    }
+  }
+
   return createClientSupabaseClient()
 }
 
