@@ -16,7 +16,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2, Plus } from "lucide-react"
-import { createSupplier } from "@/app/expense-actions"
 import { toast } from "@/components/ui/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 
@@ -70,18 +69,23 @@ export function AddSupplierDialog({ onSupplierAdded }: AddSupplierDialogProps) {
     setFormError("")
 
     try {
-      console.log("Enviando datos del proveedor:", { name, contactPerson, email, phone })
-
-      const result = await createSupplier({
-        name,
-        contact_person: contactPerson || null,
-        phone: phone || null,
-        email: email || null,
+      // Crear un nuevo proveedor directamente usando fetch
+      const response = await fetch("/api/suppliers/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          contact_person: contactPerson || null,
+          phone: phone || null,
+          email: email || null,
+        }),
       })
 
-      console.log("Resultado de createSupplier:", result)
+      const result = await response.json()
 
-      if (result.success && result.data) {
+      if (response.ok && result.success) {
         toast({
           title: "Proveedor creado",
           description: `El proveedor "${name}" ha sido creado exitosamente.`,
