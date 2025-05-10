@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Ya existe un proveedor con este nombre" }, { status: 400 })
     }
 
-    // Preparar los datos para insertar
+    // Preparar los datos para insertar - asegurarse de NO incluir un ID
     const supplierToInsert = {
       name,
       contact_person,
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       created_at: new Date().toISOString(),
     }
 
-    console.log("Datos a insertar:", supplierToInsert)
+    console.log("Intentando insertar proveedor con datos:", JSON.stringify(supplierToInsert, null, 2))
 
     // Insertar el proveedor en la base de datos
     const { data, error } = await supabase.from("suppliers").insert([supplierToInsert]).select()
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
       )
     }
 
-    console.log("Proveedor creado exitosamente:", data[0])
+    console.log("Resultado de la inserción:", { data, error })
 
     // Revalidar rutas para actualizar los datos en la UI
     revalidatePath("/expenses/new")
