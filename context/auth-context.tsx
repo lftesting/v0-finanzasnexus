@@ -4,7 +4,7 @@ import type React from "react"
 
 import { createClientSupabaseClient } from "@/lib/supabase"
 import type { Session, User } from "@supabase/supabase-js"
-import { createContext, useContext, useEffect, useState } from "react"
+import { createContext, useContext, useEffect, useState, useRef } from "react"
 
 type AuthContextType = {
   user: User | null
@@ -27,7 +27,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const supabase = createClientSupabaseClient()
+
+  // Usar useRef para mantener una referencia estable al cliente de Supabase
+  const supabaseRef = useRef(createClientSupabaseClient())
+  const supabase = supabaseRef.current
 
   const refreshSession = async () => {
     setIsLoading(true)

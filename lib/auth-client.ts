@@ -2,9 +2,14 @@
 
 import { createClientSupabaseClient } from "@/lib/supabase"
 
+// Crear una referencia al cliente de Supabase
+const getSupabaseClient = () => {
+  return createClientSupabaseClient()
+}
+
 // Funciones de autenticación para el lado del cliente
 export const getClientSession = async () => {
-  const supabase = createClientSupabaseClient()
+  const supabase = getSupabaseClient()
 
   try {
     // Forzar la actualización de la sesión
@@ -29,7 +34,7 @@ export const getClientSession = async () => {
 }
 
 export const signInWithEmail = async (email: string, password: string) => {
-  const supabase = createClientSupabaseClient()
+  const supabase = getSupabaseClient()
 
   try {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -54,7 +59,7 @@ export const signInWithEmail = async (email: string, password: string) => {
 }
 
 export const signOut = async () => {
-  const supabase = createClientSupabaseClient()
+  const supabase = getSupabaseClient()
 
   try {
     await supabase.auth.signOut()
