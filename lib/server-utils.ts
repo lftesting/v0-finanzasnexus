@@ -1,6 +1,9 @@
 import { cookies } from "next/headers"
 import { createClient } from "@supabase/supabase-js"
 
+// Variable global para almacenar la instancia del cliente del servidor
+const serverSupabaseClient: ReturnType<typeof createClient> | null = null
+
 // Esta función solo debe usarse en Server Components o Server Actions
 export function getServerCookies() {
   return cookies()
@@ -8,6 +11,8 @@ export function getServerCookies() {
 
 // Crear cliente para el lado del servidor (solo usar en Server Components o Server Actions)
 export function createServerSupabaseClient() {
+  // No usamos singleton en el servidor porque cada solicitud debe tener su propio cliente
+  // con sus propias cookies
   const cookieStore = getServerCookies()
 
   // Usar las variables de entorno correctas para el cliente del servidor

@@ -33,3 +33,11 @@ export interface Payment {
   created_by?: string
   updated_by?: string
 }
+
+export type Supplier = {
+  id: number
+  name: string
+  contact_person?: string
+  phone?: string
+  email?: string
+}

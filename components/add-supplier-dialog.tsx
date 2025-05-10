@@ -3,45 +3,51 @@
 import type React from "react"
 
 import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { toast } from "@/components/ui/use-toast"
-import { Toaster } from "@/components/ui/toaster"
+import { Textarea } from "@/components/ui/textarea"
+import type { Supplier } from "@/types/payment"
+import { AlertCircle, Loader2 } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 interface AddSupplierDialogProps {
-  isOpen: boolean
-  onClose: () => void
-  onSupplierAdded: (supplier: any) => void
+  onSupplierAdded: (supplier: Supplier) => void
 }
 
-export function AddSupplierDialog({ isOpen, onClose, onSupplierAdded }: AddSupplierDialogProps) {
+export function AddSupplierDialog({ onSupplierAdded }: AddSupplierDialogProps) {
+  const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [contactPerson, setContactPerson] = useState("")
   const [phone, setPhone] = useState("")
   const [email, setEmail] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [address, setAddress] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
-    // Validación básica
+    // Validar que el nombre no esté vacío
     if (!name.trim()) {
       setError("El nombre del proveedor es obligatorio")
       return
     }
 
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError("El formato del email no es válido")
-      return
-    }
+    setIsLoading(true)
 
     try {
-      setIsSubmitting(true)
-      console.log("Enviando datos del proveedor:", { name, contactPerson, phone, email })
+      console.log("Enviando datos del proveedor:", { name, contactPerson, phone, email, address })
 
       const response = await fetch("/api/suppliers/create", {
         method: "POST",
@@ -53,113 +59,133 @@ export function AddSupplierDialog({ isOpen, onClose, onSupplierAdded }: AddSuppl
           contact_person: contactPerson,
           phone,
           email,
+          address,
         }),
       })
 
-      const result = await response.json()
-      console.log("Respuesta del servidor:", result)
+      const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || "Error al crear el proveedor")
+        throw new Error(data.error || "Error al crear el proveedor")
       }
 
-      if (result.success && result.data) {
-        toast({
-          title: "Proveedor creado",
-          description: `El proveedor "${name}" ha sido creado exitosamente.`,
-        })
+      console.log("Proveedor creado exitosamente:", data.supplier)
 
-        // Limpiar el formulario
-        setName("")
-        setContactPerson("")
-        setPhone("")
-        setEmail("")
+      // Llamar a la función de callback con el nuevo proveedor
+      onSupplierAdded(data.supplier)
 
-        // Cerrar el diálogo y notificar al componente padre
-        onClose()
-        onSupplierAdded(result.data)
-      } else {
-        throw new Error("No se recibieron datos del proveedor creado")
-      }
-    } catch (err: any) {
-      console.error("Error al crear proveedor:", err)
-      setError(err.message || "Ocurrió un error al crear el proveedor")
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: err.message || "Ocurrió un error al crear el proveedor",
-      })
+      // Limpiar el formulario y cerrar el diálogo
+      resetForm()
+      setOpen(false)
+    } catch (err) {
+      console.error("Error al crear el proveedor:", err)
+      setError(err instanceof Error ? err.message : "Error desconocido al crear el proveedor")
     } finally {
-      setIsSubmitting(false)
+      setIsLoading(false)
     }
   }
 
+  const resetForm = () => {
+    setName("")
+    setContactPerson("")
+    setPhone("")
+    setEmail("")
+    setAddress("")
+    setError(null)
+  }
+
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      resetForm()
+    }
+    setOpen(newOpen)
+  }
+
   return (
-    <>
-      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Agregar nuevo proveedor</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubmit}>
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">{error}</div>
-            )}
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">
-                  Nombre *
-                </Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="col-span-3"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="contactPerson" className="text-right">
-                  Contacto
-                </Label>
-                <Input
-                  id="contactPerson"
-                  value={contactPerson}
-                  onChange={(e) => setContactPerson(e.target.value)}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="phone" className="text-right">
-                  Teléfono
-                </Label>
-                <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="col-span-3" />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="email" className="text-right">
-                  Email
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="col-span-3"
-                />
-              </div>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <Button variant="outline">Agregar Proveedor</Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Agregar Proveedor</DialogTitle>
+          <DialogDescription>
+            Ingresa los datos del nuevo proveedor. Haz clic en guardar cuando hayas terminado.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit}>
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Nombre*
+              </Label>
+              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="col-span-3" required />
             </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Guardando..." : "Guardar proveedor"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-      <Toaster />
-    </>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="contactPerson" className="text-right">
+                Contacto
+              </Label>
+              <Input
+                id="contactPerson"
+                value={contactPerson}
+                onChange={(e) => setContactPerson(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="phone" className="text-right">
+                Teléfono
+              </Label>
+              <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="col-span-3" />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="email" className="text-right">
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="address" className="text-right">
+                Dirección
+              </Label>
+              <Textarea
+                id="address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isLoading}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                "Guardar Proveedor"
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
