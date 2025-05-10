@@ -486,65 +486,76 @@ export async function createSupplier(supplierData: {
   phone: string | null
   email: string | null
 }) {
-  const supabase = createServerSupabaseClient()
+  try {
+    console.log("Iniciando createSupplier con datos:", supplierData)
 
-  // Validar que el nombre no esté vacío
-  if (!supplierData.name || supplierData.name.trim() === "") {
-    return { success: false, error: "El nombre del proveedor es obligatorio" }
+    const supabase = createServerSupabaseClient()
+
+    // Validar que el nombre no esté vacío
+    if (!supplierData.name || supplierData.name.trim() === "") {
+      console.error("Error: El nombre del proveedor es obligatorio")
+      return { success: false, error: "El nombre del proveedor es obligatorio" }
+    }
+
+    // Validar formato de email si se proporciona
+    if (supplierData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supplierData.email)) {
+      console.error("Error: El formato del email no es válido")
+      return { success: false, error: "El formato del email no es válido" }
+    }
+
+    // Verificar si ya existe un proveedor con el mismo nombre
+    const { data: existingSupplier, error: checkError } = await supabase
+      .from("suppliers")
+      .select("id")
+      .eq("name", supplierData.name)
+      .maybeSingle()
+
+    if (checkError) {
+      console.error("Error al verificar proveedor existente:", checkError)
+      return { success: false, error: "Error al verificar si el proveedor ya existe" }
+    }
+
+    if (existingSupplier) {
+      console.error("Error: Ya existe un proveedor con este nombre")
+      return { success: false, error: "Ya existe un proveedor con este nombre" }
+    }
+
+    // Preparar los datos para insertar - CORREGIDO: eliminado el campo created_by que no existe en la tabla
+    const supplierToInsert = {
+      name: supplierData.name,
+      contact_person: supplierData.contact_person,
+      phone: supplierData.phone,
+      email: supplierData.email,
+      created_at: new Date().toISOString(),
+    }
+
+    console.log("Datos a insertar:", supplierToInsert)
+
+    // Insertar el proveedor en la base de datos
+    const { data, error } = await supabase.from("suppliers").insert([supplierToInsert]).select()
+
+    if (error) {
+      console.error("Error al crear el proveedor:", error)
+      return { success: false, error: error.message }
+    }
+
+    // Verificar que se hayan devuelto datos
+    if (!data || data.length === 0) {
+      console.error("No se recibieron datos después de insertar el proveedor")
+      return { success: false, error: "Error al crear el proveedor: no se recibieron datos" }
+    }
+
+    console.log("Proveedor creado exitosamente:", data[0])
+
+    // Revalidar rutas para actualizar los datos en la UI
+    revalidatePath("/expenses/new")
+    revalidatePath("/expenses/[id]/edit")
+
+    return { success: true, data: data[0] }
+  } catch (error) {
+    console.error("Error inesperado en createSupplier:", error)
+    return { success: false, error: `Error inesperado: ${error}` }
   }
-
-  // Validar formato de email si se proporciona
-  if (supplierData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supplierData.email)) {
-    return { success: false, error: "El formato del email no es válido" }
-  }
-
-  // Obtener el usuario actual
-  const currentUser = await getCurrentUser()
-  const createdBy = currentUser?.username || "Sistema"
-
-  console.log("Usuario para crear proveedor:", createdBy)
-
-  // Verificar si ya existe un proveedor con el mismo nombre
-  const { data: existingSupplier, error: checkError } = await supabase
-    .from("suppliers")
-    .select("id")
-    .eq("name", supplierData.name)
-    .maybeSingle()
-
-  if (checkError) {
-    console.error("Error al verificar proveedor existente:", checkError)
-    return { success: false, error: "Error al verificar si el proveedor ya existe" }
-  }
-
-  if (existingSupplier) {
-    return { success: false, error: "Ya existe un proveedor con este nombre" }
-  }
-
-  // Insertar el proveedor en la base de datos
-  const { data, error } = await supabase
-    .from("suppliers")
-    .insert([
-      {
-        ...supplierData,
-        created_by: createdBy,
-        created_at: new Date().toISOString(),
-      },
-    ])
-    .select()
-
-  if (error) {
-    console.error("Error al crear el proveedor:", error)
-    return { success: false, error: error.message }
-  }
-
-  // Asegurarse de que data existe y tiene al menos un elemento
-  if (!data || data.length === 0) {
-    console.error("No se recibieron datos después de insertar el proveedor")
-    return { success: false, error: "Error al crear el proveedor: no se recibieron datos" }
-  }
-
-  console.log("Proveedor creado exitosamente:", data[0])
-  return { success: true, data: data[0] }
 }
 
 export async function deleteExpense(id: number) {
