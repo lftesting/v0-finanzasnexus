@@ -121,10 +121,10 @@ export default function ExpensesListPage() {
     <div className="space-y-2 text-sm">
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <span className="font-semibold">Proveedor:</span> {expense.suppliers.name}
+          <span className="font-semibold">Proveedor:</span> {expense.suppliers?.name || "Sin proveedor"}
         </div>
         <div>
-          <span className="font-semibold">Categoría:</span> {expense.expense_categories.name}
+          <span className="font-semibold">Categoría:</span> {expense.expense_categories?.name || "Sin categoría"}
         </div>
         <div>
           <span className="font-semibold">Importe:</span> ${Number(expense.amount).toFixed(2)}
@@ -240,8 +240,8 @@ export default function ExpensesListPage() {
                               ? format(new Date(expense.payment_date), "dd/MM/yyyy", { locale: es })
                               : "-"}
                           </TableCell>
-                          <TableCell>{expense.suppliers.name}</TableCell>
-                          <TableCell>{expense.expense_categories.name}</TableCell>
+                          <TableCell>{expense.suppliers?.name || "Sin proveedor"}</TableCell>
+                          <TableCell>{expense.expense_categories?.name || "Sin categoría"}</TableCell>
                           <TableCell>{expense.invoice_number || "-"}</TableCell>
                           <TableCell>${Number(expense.amount).toFixed(2)}</TableCell>
                           <TableCell>{getStatusBadge(expense.status)}</TableCell>
