@@ -31,6 +31,7 @@ export default function ExpensesListPage() {
   })
   const [loading, setLoading] = useState(true)
   const [currentFilter, setCurrentFilter] = useState<DateFilter>({})
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     loadData(currentFilter)
@@ -38,12 +39,42 @@ export default function ExpensesListPage() {
 
   const loadData = async (filters?: DateFilter) => {
     setLoading(true)
+    setError(null)
     try {
-      const [expensesData, summaryData] = await Promise.all([getExpenses(filters), getExpensesSummary(filters)])
-      setExpenses(expensesData)
+      // Wrap each promise in a try/catch to handle individual failures
+      let expensesData: any[] = []
+      let summaryData = {
+        total: 0,
+        count: 0,
+        efectivo: 0,
+        tarjeta: 0,
+        transferencia: 0,
+        debito: 0,
+        pendientes: 0,
+        pagados: 0,
+      }
+
+      try {
+        expensesData = await getExpenses(filters)
+        console.log("Expenses data loaded:", expensesData.length, "records")
+      } catch (expensesError) {
+        console.error("Error loading expenses data:", expensesError)
+        setError("Error al cargar los gastos. Por favor, intente nuevamente.")
+      }
+
+      try {
+        summaryData = await getExpensesSummary(filters)
+        console.log("Summary data loaded successfully")
+      } catch (summaryError) {
+        console.error("Error loading summary data:", summaryError)
+        // Continue with default summary values
+      }
+
+      setExpenses(expensesData || [])
       setSummary(summaryData)
     } catch (error) {
-      console.error("Error al cargar los datos:", error)
+      console.error("Error general al cargar los datos:", error)
+      setError("Ha ocurrido un error al cargar los datos. Por favor, intente nuevamente.")
     } finally {
       setLoading(false)
     }
@@ -116,56 +147,66 @@ export default function ExpensesListPage() {
     }
   }
 
-  // Función para generar los detalles del gasto para el diálogo de confirmación
-  const getExpenseDetails = (expense: any) => (
-    <div className="space-y-2 text-sm">
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <span className="font-semibold">Proveedor:</span> {expense.suppliers?.name || "Sin proveedor"}
-        </div>
-        <div>
-          <span className="font-semibold">Categoría:</span> {expense.expense_categories?.name || "Sin categoría"}
-        </div>
-        <div>
-          <span className="font-semibold">Importe:</span> ${Number(expense.amount).toFixed(2)}
-        </div>
-        <div>
-          <span className="font-semibold">Estado:</span> {expense.status === "pendiente" ? "Pendiente" : "Pagado"}
-        </div>
-        <div>
-          <span className="font-semibold">Método de pago:</span> {getPaymentMethodLabel(expense.payment_method)}
-        </div>
-        <div>
-          <span className="font-semibold">Fecha:</span> {format(new Date(expense.date), "dd/MM/yyyy", { locale: es })}
-        </div>
-        <div>
-          <span className="font-semibold">Vencimiento:</span>{" "}
-          {format(new Date(expense.due_date), "dd/MM/yyyy", { locale: es })}
-        </div>
-        {expense.payment_date && (
+  const getExpenseDetails = (expense: any) => {
+    if (!expense) return <div>No hay detalles disponibles</div>
+
+    // Ensure all date fields are valid before formatting
+    const hasValidDate = expense?.date && !isNaN(new Date(expense.date).getTime())
+    const hasValidDueDate = expense?.due_date && !isNaN(new Date(expense.due_date).getTime())
+    const hasValidPaymentDate = expense?.payment_date && !isNaN(new Date(expense.payment_date).getTime())
+
+    return (
+      <div className="space-y-2 text-sm">
+        <div className="grid grid-cols-2 gap-2">
           <div>
-            <span className="font-semibold">Fecha de pago:</span>{" "}
-            {format(new Date(expense.payment_date), "dd/MM/yyyy", { locale: es })}
+            <span className="font-semibold">Proveedor:</span> {expense.suppliers?.name || "Sin proveedor"}
           </div>
-        )}
-        {expense.invoice_number && (
           <div>
-            <span className="font-semibold">Factura:</span> {expense.invoice_number}
+            <span className="font-semibold">Categoría:</span> {expense.expense_categories?.name || "Sin categoría"}
           </div>
-        )}
-        {expense.created_by && (
           <div>
-            <span className="font-semibold">Creado por:</span> {expense.created_by}
+            <span className="font-semibold">Importe:</span> ${Number(expense?.amount || 0).toFixed(2)}
+          </div>
+          <div>
+            <span className="font-semibold">Estado:</span> {expense?.status === "pendiente" ? "Pendiente" : "Pagado"}
+          </div>
+          <div>
+            <span className="font-semibold">Método de pago:</span>{" "}
+            {getPaymentMethodLabel(expense?.payment_method || "")}
+          </div>
+          <div>
+            <span className="font-semibold">Fecha:</span>{" "}
+            {hasValidDate ? format(new Date(expense.date), "dd/MM/yyyy", { locale: es }) : "-"}
+          </div>
+          <div>
+            <span className="font-semibold">Vencimiento:</span>{" "}
+            {hasValidDueDate ? format(new Date(expense.due_date), "dd/MM/yyyy", { locale: es }) : "-"}
+          </div>
+          {hasValidPaymentDate && (
+            <div>
+              <span className="font-semibold">Fecha de pago:</span>{" "}
+              {format(new Date(expense.payment_date), "dd/MM/yyyy", { locale: es })}
+            </div>
+          )}
+          {expense?.invoice_number && (
+            <div>
+              <span className="font-semibold">Factura:</span> {expense.invoice_number}
+            </div>
+          )}
+          {expense?.created_by && (
+            <div>
+              <span className="font-semibold">Creado por:</span> {expense.created_by}
+            </div>
+          )}
+        </div>
+        {expense?.description && (
+          <div>
+            <span className="font-semibold">Descripción:</span> {expense.description}
           </div>
         )}
       </div>
-      {expense.description && (
-        <div>
-          <span className="font-semibold">Descripción:</span> {expense.description}
-        </div>
-      )}
-    </div>
-  )
+    )
+  }
 
   return (
     <main className="container mx-auto py-10 px-4">
@@ -191,6 +232,18 @@ export default function ExpensesListPage() {
         </Card>
 
         <ExpenseSummary {...summary} />
+        {error && (
+          <Card className="border-red-300">
+            <CardContent className="p-4">
+              <div className="flex items-center text-red-600">
+                <p>{error}</p>
+                <Button variant="outline" size="sm" className="ml-auto" onClick={() => loadData(currentFilter)}>
+                  Reintentar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="bg-gradient-to-r from-orange-500 to-red-700 text-white">
@@ -224,64 +277,76 @@ export default function ExpensesListPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {expenses.length === 0 ? (
+                    {expenses && expenses.length > 0 ? (
+                      expenses.map((expense: any) => {
+                        // Ensure all required date fields exist before formatting
+                        const hasValidDate = expense?.date && !isNaN(new Date(expense.date).getTime())
+                        const hasValidDueDate = expense?.due_date && !isNaN(new Date(expense.due_date).getTime())
+                        const hasValidPaymentDate =
+                          expense?.payment_date && !isNaN(new Date(expense.payment_date).getTime())
+
+                        return (
+                          <TableRow key={expense?.id || Math.random().toString()}>
+                            <TableCell>
+                              {hasValidDate ? format(new Date(expense.date), "dd/MM/yyyy", { locale: es }) : "-"}
+                            </TableCell>
+                            <TableCell>
+                              {hasValidDueDate ? format(new Date(expense.due_date), "dd/MM/yyyy", { locale: es }) : "-"}
+                            </TableCell>
+                            <TableCell>
+                              {hasValidPaymentDate
+                                ? format(new Date(expense.payment_date), "dd/MM/yyyy", { locale: es })
+                                : "-"}
+                            </TableCell>
+                            <TableCell>{expense?.suppliers?.name || "Sin proveedor"}</TableCell>
+                            <TableCell>{expense?.expense_categories?.name || "Sin categoría"}</TableCell>
+                            <TableCell>{expense?.invoice_number || "-"}</TableCell>
+                            <TableCell>${Number(expense?.amount || 0).toFixed(2)}</TableCell>
+                            <TableCell>{getStatusBadge(expense?.status || "")}</TableCell>
+                            <TableCell>{getPaymentMethodLabel(expense?.payment_method || "")}</TableCell>
+                            <TableCell>
+                              {expense?.document_url ? (
+                                <a
+                                  href={expense.document_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center text-blue-600 hover:text-blue-800"
+                                  title="Ver documento adjunto"
+                                >
+                                  <FileText className="h-5 w-5 mr-1" />
+                                  <ExternalLink className="h-4 w-4" />
+                                </a>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell>{expense?.created_by || "-"}</TableCell>
+                            <TableCell>
+                              <div className="flex space-x-1">
+                                <Link href={`/expenses/${expense?.id}/edit`}>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Editar gasto">
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </Link>
+                                <DeleteConfirmationDialog
+                                  title="Eliminar gasto"
+                                  description="¿Estás seguro de que deseas eliminar este gasto? Esta acción no se puede deshacer."
+                                  onConfirm={() => handleDelete(expense?.id)}
+                                  triggerClassName="h-8 w-auto px-2"
+                                  variant="ghost"
+                                  itemDetails={getExpenseDetails(expense)}
+                                />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
+                    ) : (
                       <TableRow>
                         <TableCell colSpan={12} className="text-center py-10">
                           No hay gastos registrados que coincidan con los filtros
                         </TableCell>
                       </TableRow>
-                    ) : (
-                      expenses.map((expense: any) => (
-                        <TableRow key={expense.id}>
-                          <TableCell>{format(new Date(expense.date), "dd/MM/yyyy", { locale: es })}</TableCell>
-                          <TableCell>{format(new Date(expense.due_date), "dd/MM/yyyy", { locale: es })}</TableCell>
-                          <TableCell>
-                            {expense.payment_date
-                              ? format(new Date(expense.payment_date), "dd/MM/yyyy", { locale: es })
-                              : "-"}
-                          </TableCell>
-                          <TableCell>{expense.suppliers?.name || "Sin proveedor"}</TableCell>
-                          <TableCell>{expense.expense_categories?.name || "Sin categoría"}</TableCell>
-                          <TableCell>{expense.invoice_number || "-"}</TableCell>
-                          <TableCell>${Number(expense.amount).toFixed(2)}</TableCell>
-                          <TableCell>{getStatusBadge(expense.status)}</TableCell>
-                          <TableCell>{getPaymentMethodLabel(expense.payment_method)}</TableCell>
-                          <TableCell>
-                            {expense.document_url ? (
-                              <a
-                                href={expense.document_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center text-blue-600 hover:text-blue-800"
-                                title="Ver documento adjunto"
-                              >
-                                <FileText className="h-5 w-5 mr-1" />
-                                <ExternalLink className="h-4 w-4" />
-                              </a>
-                            ) : (
-                              <span className="text-gray-400">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell>{expense.created_by || "-"}</TableCell>
-                          <TableCell>
-                            <div className="flex space-x-1">
-                              <Link href={`/expenses/${expense.id}/edit`}>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Editar gasto">
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                              </Link>
-                              <DeleteConfirmationDialog
-                                title="Eliminar gasto"
-                                description="¿Estás seguro de que deseas eliminar este gasto? Esta acción no se puede deshacer."
-                                onConfirm={() => handleDelete(expense.id)}
-                                triggerClassName="h-8 w-auto px-2"
-                                variant="ghost"
-                                itemDetails={getExpenseDetails(expense)}
-                              />
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
                     )}
                   </TableBody>
                 </Table>

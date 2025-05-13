@@ -227,67 +227,164 @@ export async function createExpense(formData: FormData) {
 export async function getExpenses(filters?: DateFilter) {
   const supabase = createServerSupabaseClient()
 
-  // Iniciar la consulta base
-  let query = supabase.from("expenses").select(`
-      *,
-      suppliers(name),
-      expense_categories(name),
-      tribes(name),
-      rooms(room_number)
-    `)
+  try {
+    // Iniciar la consulta base
+    let query = supabase.from("expenses").select(`
+        *,
+        suppliers(name),
+        expense_categories(name),
+        tribes(name),
+        rooms(room_number)
+      `)
 
-  // Aplicar filtros de fecha si existen
-  if (filters) {
-    const { startDate, endDate, filterField = "date" } = filters
+    // Aplicar filtros de fecha si existen
+    if (filters) {
+      const { startDate, endDate, filterField = "date" } = filters
 
-    if (startDate) {
-      query = query.gte(filterField, startDate)
+      if (startDate) {
+        query = query.gte(filterField, startDate)
+      }
+
+      if (endDate) {
+        query = query.lte(filterField, endDate)
+      }
     }
 
-    if (endDate) {
-      query = query.lte(filterField, endDate)
+    // Ordenar por fecha de creación descendente
+    const { data, error } = await query.order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Error al obtener los gastos:", error)
+      throw new Error(`Error al obtener los gastos: ${error.message}`)
     }
+
+    // Validate the data before returning it
+    if (!data) {
+      console.warn("No se encontraron datos de gastos")
+      return []
+    }
+
+    // Log the first record for debugging (only in development)
+    if (process.env.NODE_ENV === "development" && data.length > 0) {
+      console.log("Primer registro de gastos:", JSON.stringify(data[0]).substring(0, 200) + "...")
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error inesperado al obtener los gastos:", error)
+    throw error
   }
-
-  // Ordenar por fecha de creación descendente
-  const { data, error } = await query.order("created_at", { ascending: false })
-
-  if (error) {
-    console.error("Error al obtener los gastos:", error)
-    return []
-  }
-
-  return data || []
 }
 
 export async function getExpensesSummary(filters?: DateFilter) {
   const supabase = createServerSupabaseClient()
 
-  // Iniciar la consulta base
-  let query = supabase.from("expenses").select(`
-      amount,
-      payment_method,
-      status
-    `)
+  try {
+    // Iniciar la consulta base
+    let query = supabase.from("expenses").select(`
+        amount,
+        payment_method,
+        status
+      `)
 
-  // Aplicar filtros de fecha si existen
-  if (filters) {
-    const { startDate, endDate, filterField = "date" } = filters
+    // Aplicar filtros de fecha si existen
+    if (filters) {
+      const { startDate, endDate, filterField = "date" } = filters
 
-    if (startDate) {
-      query = query.gte(filterField, startDate)
+      if (startDate) {
+        query = query.gte(filterField, startDate)
+      }
+
+      if (endDate) {
+        query = query.lte(filterField, endDate)
+      }
     }
 
-    if (endDate) {
-      query = query.lte(filterField, endDate)
+    // Ejecutar la consulta
+    const { data, error } = await query
+
+    if (error) {
+      console.error("Error al obtener el resumen de gastos:", error)
+      throw new Error(`Error al obtener el resumen de gastos: ${error.message}`)
     }
-  }
 
-  // Ejecutar la consulta
-  const { data, error } = await query
+    // Validate the data before processing
+    if (!data) {
+      console.warn("No se encontraron datos para el resumen de gastos")
+      return {
+        total: 0,
+        count: 0,
+        efectivo: 0,
+        tarjeta: 0,
+        transferencia: 0,
+        debito: 0,
+        pendientes: 0,
+        pagados: 0,
+      }
+    }
 
-  if (error) {
-    console.error("Error al obtener el resumen de gastos:", error)
+    // Calcular totales
+    const total = data.reduce((sum, expense) => {
+      const amount = Number(expense?.amount || 0)
+      return isNaN(amount) ? sum : sum + amount
+    }, 0)
+
+    const efectivo = data
+      .filter((expense) => expense?.payment_method === "efectivo")
+      .reduce((sum, expense) => {
+        const amount = Number(expense?.amount || 0)
+        return isNaN(amount) ? sum : sum + amount
+      }, 0)
+
+    const tarjeta = data
+      .filter((expense) => expense?.payment_method === "tarjeta_credito")
+      .reduce((sum, expense) => {
+        const amount = Number(expense?.amount || 0)
+        return isNaN(amount) ? sum : sum + amount
+      }, 0)
+
+    const transferencia = data
+      .filter((expense) => expense?.payment_method === "transferencia")
+      .reduce((sum, expense) => {
+        const amount = Number(expense?.amount || 0)
+        return isNaN(amount) ? sum : sum + amount
+      }, 0)
+
+    const debito = data
+      .filter((expense) => expense?.payment_method === "tarjeta_debito")
+      .reduce((sum, expense) => {
+        const amount = Number(expense?.amount || 0)
+        return isNaN(amount) ? sum : sum + amount
+      }, 0)
+
+    // Calcular totales por estado
+    const pendientes = data
+      .filter((expense) => expense?.status === "pendiente")
+      .reduce((sum, expense) => {
+        const amount = Number(expense?.amount || 0)
+        return isNaN(amount) ? sum : sum + amount
+      }, 0)
+
+    const pagados = data
+      .filter((expense) => expense?.status === "pagado")
+      .reduce((sum, expense) => {
+        const amount = Number(expense?.amount || 0)
+        return isNaN(amount) ? sum : sum + amount
+      }, 0)
+
+    return {
+      total,
+      count: data.length,
+      efectivo,
+      tarjeta,
+      transferencia,
+      debito,
+      pendientes,
+      pagados,
+    }
+  } catch (error) {
+    console.error("Error inesperado al obtener el resumen de gastos:", error)
+    // Return default values instead of throwing
     return {
       total: 0,
       count: 0,
@@ -298,40 +395,6 @@ export async function getExpensesSummary(filters?: DateFilter) {
       pendientes: 0,
       pagados: 0,
     }
-  }
-
-  // Calcular totales
-  const total = data.reduce((sum, expense) => sum + Number(expense.amount), 0)
-  const efectivo = data
-    .filter((expense) => expense.payment_method === "efectivo")
-    .reduce((sum, expense) => sum + Number(expense.amount), 0)
-  const tarjeta = data
-    .filter((expense) => expense.payment_method === "tarjeta_credito")
-    .reduce((sum, expense) => sum + Number(expense.amount), 0)
-  const transferencia = data
-    .filter((expense) => expense.payment_method === "transferencia")
-    .reduce((sum, expense) => sum + Number(expense.amount), 0)
-  const debito = data
-    .filter((expense) => expense.payment_method === "tarjeta_debito")
-    .reduce((sum, expense) => sum + Number(expense.amount), 0)
-
-  // Calcular totales por estado
-  const pendientes = data
-    .filter((expense) => expense.status === "pendiente")
-    .reduce((sum, expense) => sum + Number(expense.amount), 0)
-  const pagados = data
-    .filter((expense) => expense.status === "pagado")
-    .reduce((sum, expense) => sum + Number(expense.amount), 0)
-
-  return {
-    total,
-    count: data.length,
-    efectivo,
-    tarjeta,
-    transferencia,
-    debito,
-    pendientes,
-    pagados,
   }
 }
 
