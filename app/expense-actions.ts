@@ -226,38 +226,76 @@ export async function createExpense(formData: FormData) {
 
 export async function getExpenses(filters?: DateFilter) {
   const supabase = createServerSupabaseClient()
+  console.log("Obteniendo gastos con filtros:", filters)
 
-  // Iniciar la consulta base
-  let query = supabase.from("expenses").select(`
-      *,
-      suppliers(name),
-      expense_categories(name),
-      tribes(name),
-      rooms(room_number)
-    `)
+  try {
+    // Primero, obtener todos los gastos sin joins para asegurarnos de tener todos los registros
+    let baseQuery = supabase.from("expenses").select("*")
 
-  // Aplicar filtros de fecha si existen
-  if (filters) {
-    const { startDate, endDate, filterField = "date" } = filters
+    // Aplicar filtros de fecha si existen
+    if (filters) {
+      const { startDate, endDate, filterField = "date" } = filters
 
-    if (startDate) {
-      query = query.gte(filterField, startDate)
+      if (startDate) {
+        baseQuery = baseQuery.gte(filterField, startDate)
+      }
+
+      if (endDate) {
+        baseQuery = baseQuery.lte(filterField, endDate)
+      }
     }
 
-    if (endDate) {
-      query = query.lte(filterField, endDate)
+    // Ordenar por fecha de creación descendente
+    const { data: expensesData, error: expensesError } = await baseQuery.order("created_at", { ascending: false })
+
+    if (expensesError) {
+      console.error("Error al obtener los gastos:", expensesError)
+      return []
     }
-  }
 
-  // Ordenar por fecha de creación descendente
-  const { data, error } = await query.order("created_at", { ascending: false })
+    if (!expensesData || expensesData.length === 0) {
+      console.log("No se encontraron gastos con los filtros aplicados")
+      return []
+    }
 
-  if (error) {
-    console.error("Error al obtener los gastos:", error)
+    console.log(`Se encontraron ${expensesData.length} gastos en la consulta base`)
+
+    // Obtener datos relacionados por separado
+    const [suppliersData, categoriesData, tribesData, roomsData] = await Promise.all([
+      supabase.from("suppliers").select("id, name"),
+      supabase.from("expense_categories").select("id, name"),
+      supabase.from("tribes").select("id, name"),
+      supabase.from("rooms").select("id, room_number"),
+    ])
+
+    // Crear mapas para búsqueda rápida
+    const suppliersMap = new Map(suppliersData.data?.map((s) => [s.id, s]) || [])
+    const categoriesMap = new Map(categoriesData.data?.map((c) => [c.id, c]) || [])
+    const tribesMap = new Map(tribesData.data?.map((t) => [t.id, t]) || [])
+    const roomsMap = new Map(roomsData.data?.map((r) => [r.id, r]) || [])
+
+    // Enriquecer los datos de gastos con la información relacionada
+    const enrichedExpenses = expensesData.map((expense) => {
+      const supplier = suppliersMap.get(expense.supplier_id)
+      const category = categoriesMap.get(expense.category_id)
+      const tribe = expense.tribe_id ? tribesMap.get(expense.tribe_id) : null
+      const room = expense.room_id ? roomsMap.get(expense.room_id) : null
+
+      return {
+        ...expense,
+        suppliers: supplier || { name: "Proveedor no encontrado" },
+        expense_categories: category || { name: "Categoría no encontrada" },
+        tribes: tribe || null,
+        rooms: room || null,
+      }
+    })
+
+    console.log(`Se procesaron ${enrichedExpenses.length} gastos con datos relacionados`)
+    return enrichedExpenses
+  } catch (error) {
+    console.error("Error inesperado al obtener gastos:", error)
     return []
   }
-
-  return data || []
 }
 
 export async function getExpensesSummary(filters?: DateFilter) {
