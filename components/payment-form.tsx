@@ -36,6 +36,7 @@ export default function PaymentForm() {
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isLoadingRooms, setIsLoadingRooms] = useState(false)
 
   // Nuevos estados para los importes
   const [rentAmount, setRentAmount] = useState<string>("")
@@ -45,8 +46,18 @@ export default function PaymentForm() {
   // Cargar las tribus al montar el componente
   useEffect(() => {
     const loadTribes = async () => {
-      const tribesData = await getTribes()
-      setTribes(tribesData)
+      try {
+        const tribesData = await getTribes()
+        console.log("Tribus cargadas:", tribesData)
+        setTribes(tribesData)
+      } catch (error) {
+        console.error("Error al cargar las tribus:", error)
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar las tribus. Por favor, intenta de nuevo.",
+          variant: "destructive",
+        })
+      }
     }
 
     loadTribes()
@@ -55,9 +66,24 @@ export default function PaymentForm() {
   // Cargar las habitaciones cuando se selecciona una tribu
   useEffect(() => {
     const loadRooms = async () => {
-      if (selectedTribe) {
-        const roomsData = await getRoomsByTribe(Number.parseInt(selectedTribe))
-        setRooms(roomsData)
+      if (selectedTribe && selectedTribe !== "none") {
+        setIsLoadingRooms(true)
+        try {
+          console.log("Cargando habitaciones para la tribu:", selectedTribe)
+          const roomsData = await getRoomsByTribe(Number.parseInt(selectedTribe))
+          console.log("Habitaciones cargadas:", roomsData)
+          setRooms(roomsData)
+        } catch (error) {
+          console.error("Error al cargar las habitaciones:", error)
+          toast({
+            title: "Error",
+            description: "No se pudieron cargar las habitaciones para esta tribu.",
+            variant: "destructive",
+          })
+          setRooms([])
+        } finally {
+          setIsLoadingRooms(false)
+        }
       } else {
         setRooms([])
       }
@@ -284,38 +310,56 @@ export default function PaymentForm() {
                 <SelectValue placeholder="Selecciona una tribu" />
               </SelectTrigger>
               <SelectContent>
-                {tribes.map((tribe) => (
-                  <SelectItem key={tribe.id} value={tribe.id.toString()}>
-                    {tribe.name}
-                  </SelectItem>
-                ))}
+                {tribes.length > 0 ? (
+                  tribes.map((tribe) => (
+                    <SelectItem key={tribe.id} value={tribe.id.toString()}>
+                      {tribe.name}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="p-2 text-center text-sm text-gray-500">No hay tribus disponibles</div>
+                )}
               </SelectContent>
             </Select>
+            {tribes.length === 0 && (
+              <p className="text-xs text-amber-600">No se encontraron tribus. Contacta al administrador.</p>
+            )}
           </div>
 
           {/* Habitación ID */}
           <div className="space-y-2">
             <Label htmlFor="roomId">Habitación ID *</Label>
-            <Select name="roomId" required disabled={!selectedTribe || rooms.length === 0}>
+            <Select name="roomId" required disabled={!selectedTribe || isLoadingRooms}>
               <SelectTrigger>
                 <SelectValue
                   placeholder={
-                    !selectedTribe
-                      ? "Primero selecciona una tribu"
-                      : rooms.length === 0
-                        ? "No hay habitaciones disponibles"
-                        : "Selecciona una habitación"
+                    isLoadingRooms
+                      ? "Cargando habitaciones..."
+                      : !selectedTribe
+                        ? "Primero selecciona una tribu"
+                        : rooms.length === 0
+                          ? "No hay habitaciones disponibles"
+                          : "Selecciona una habitación"
                   }
                 />
               </SelectTrigger>
               <SelectContent>
-                {rooms.map((room) => (
-                  <SelectItem key={room.id} value={room.id.toString()}>
-                    {room.room_number}
-                  </SelectItem>
-                ))}
+                {isLoadingRooms ? (
+                  <div className="p-2 text-center text-sm text-gray-500">Cargando habitaciones...</div>
+                ) : rooms.length > 0 ? (
+                  rooms.map((room) => (
+                    <SelectItem key={room.id} value={room.id.toString()}>
+                      {room.room_number}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="p-2 text-center text-sm text-gray-500">No hay habitaciones disponibles</div>
+                )}
               </SelectContent>
             </Select>
+            {selectedTribe && !isLoadingRooms && rooms.length === 0 && (
+              <p className="text-xs text-amber-600">No hay habitaciones disponibles para esta tribu</p>
+            )}
           </div>
 
           {/* Sección de importes */}

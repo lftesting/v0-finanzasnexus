@@ -1,31 +1,35 @@
 "use server"
 
-import { createServerSupabaseClient, getCurrentUser } from "@/lib/server-utils"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 
-export type Supplier = {
+export interface Supplier {
   id: number
   name: string
-  contact_person?: string
-  phone?: string
-  email?: string
+  created_at?: string
+  updated_at?: string
 }
 
-export type ExpenseCategory = {
+export interface ExpenseCategory {
   id: number
   name: string
-  description?: string
+  created_at?: string
+  updated_at?: string
 }
 
-export type Tribe = {
+export interface Tribe {
   id: number
   name: string
+  created_at?: string
+  updated_at?: string
 }
 
-// Actualizar la definición del tipo Room para reflejar la estructura correcta
-export type Room = {
+export interface Room {
   id: number
   room_number: string
+  tribe_id: number
+  created_at?: string
+  updated_at?: string
 }
 
 export type DateFilter = {
@@ -57,177 +61,440 @@ export type Expense = {
   updated_by: string | null
 }
 
+// Función para obtener todos los proveedores
 export async function getSuppliers(): Promise<Supplier[]> {
-  const supabase = createServerSupabaseClient()
-  const { data, error } = await supabase.from("suppliers").select("*").order("name")
+  try {
+    const supabase = createServerSupabaseClient()
 
-  if (error) {
-    console.error("Error al obtener los proveedores:", error)
+    const { data, error } = await supabase.from("suppliers").select("*").order("name", { ascending: true })
+
+    if (error) {
+      console.error("Error al obtener proveedores:", error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error inesperado al obtener proveedores:", error)
     return []
   }
-
-  return data || []
 }
 
+// Función para obtener todas las categorías de gastos
 export async function getExpenseCategories(): Promise<ExpenseCategory[]> {
-  const supabase = createServerSupabaseClient()
-  const { data, error } = await supabase.from("expense_categories").select("*").order("name")
+  try {
+    const supabase = createServerSupabaseClient()
 
-  if (error) {
-    console.error("Error al obtener las categorías:", error)
+    const { data, error } = await supabase.from("expense_categories").select("*").order("name", { ascending: true })
+
+    if (error) {
+      console.error("Error al obtener categorías de gastos:", error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error inesperado al obtener categorías de gastos:", error)
     return []
   }
-
-  return data || []
 }
 
-// Nueva función para obtener las tribus
+// Función para obtener todas las tribus
 export async function getTribes(): Promise<Tribe[]> {
-  const supabase = createServerSupabaseClient()
-  const { data, error } = await supabase.from("tribes").select("*").order("name")
+  try {
+    console.log("Iniciando getTribes() - Versión depuración")
+    const supabase = createServerSupabaseClient()
 
-  if (error) {
-    console.error("Error al obtener las tribus:", error)
+    console.log("Ejecutando consulta directa a la tabla tribes")
+    const { data, error } = await supabase.from("tribes").select("*")
+
+    if (error) {
+      console.error("Error al obtener tribus:", error)
+      return []
+    }
+
+    if (!data) {
+      console.log("No se recibieron datos de la consulta")
+      return []
+    }
+
+    console.log(`Se encontraron ${data.length} tribus:`, JSON.stringify(data))
+    return data
+  } catch (error) {
+    console.error("Error inesperado al obtener tribus:", error)
     return []
   }
-
-  return data || []
 }
 
-// Corregir la función getRooms para usar room_number en lugar de name
-export async function getRooms(): Promise<Room[]> {
-  const supabase = createServerSupabaseClient()
-  const { data, error } = await supabase.from("rooms").select("id, room_number").order("room_number")
+export async function getRooms() {
+  try {
+    const supabase = createServerSupabaseClient()
 
-  if (error) {
-    console.error("Error al obtener las habitaciones:", error)
+    const { data, error } = await supabase.from("rooms").select("id, room_number, tribe_id").order("room_number")
+
+    if (error) {
+      console.error("Error al obtener habitaciones:", error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error("Error inesperado al obtener habitaciones:", error)
     return []
   }
-
-  return data || []
 }
 
-// Modificar la función createExpense para incluir bank_account
+export async function getRoomsByTribe(tribeId: number) {
+  try {
+    if (!tribeId) {
+      console.log("No se proporcionó ID de tribu")
+      return []
+    }
+
+    console.log(`Iniciando getRoomsByTribe(${tribeId})`)
+    const supabase = createServerSupabaseClient()
+
+    console.log(`Ejecutando consulta a la tabla rooms con tribe_id=${tribeId}`)
+    const { data, error } = await supabase
+      .from("rooms")
+      .select("id, room_number")
+      .eq("tribe_id", tribeId)
+      .order("room_number")
+
+    if (error) {
+      console.error(`Error al obtener habitaciones para tribu ${tribeId}:`, error)
+      return []
+    }
+
+    console.log(`Se encontraron ${data?.length || 0} habitaciones para tribu ${tribeId}`)
+    return data || []
+  } catch (error) {
+    console.error(`Error inesperado al obtener habitaciones para tribu ${tribeId}:`, error)
+    return []
+  }
+}
+
+// Función para crear un nuevo proveedor
+export async function createSupplier(formData: FormData) {
+  try {
+    const name = formData.get("name") as string
+
+    if (!name || name.trim() === "") {
+      return { success: false, error: "El nombre del proveedor es obligatorio" }
+    }
+
+    const supabase = createServerSupabaseClient()
+
+    // Verificar si ya existe un proveedor con el mismo nombre
+    const { data: existingSupplier } = await supabase
+      .from("suppliers")
+      .select("id")
+      .ilike("name", name.trim())
+      .maybeSingle()
+
+    if (existingSupplier) {
+      return {
+        success: false,
+        error: "Ya existe un proveedor con este nombre",
+        supplierId: existingSupplier.id,
+      }
+    }
+
+    // Crear el nuevo proveedor
+    const { data, error } = await supabase
+      .from("suppliers")
+      .insert([{ name: name.trim() }])
+      .select()
+      .single()
+
+    if (error) {
+      console.error("Error al crear proveedor:", error)
+      return { success: false, error: "Error al crear el proveedor" }
+    }
+
+    return { success: true, supplierId: data.id, name: data.name }
+  } catch (error) {
+    console.error("Error inesperado al crear proveedor:", error)
+    return { success: false, error: "Error inesperado al crear el proveedor" }
+  }
+}
+
+// Función para crear un nuevo gasto
 export async function createExpense(formData: FormData) {
-  const supabase = createServerSupabaseClient()
+  try {
+    const supabase = createServerSupabaseClient()
 
-  // Obtener el usuario actual usando nuestra nueva función
-  const currentUser = await getCurrentUser()
-  const createdBy = currentUser?.username || "Sistema"
+    // Obtener el usuario actual
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userEmail = user?.email || "sistema"
 
-  console.log("Usuario para crear gasto:", createdBy)
+    // Extraer datos del formulario
+    const supplierId = formData.get("supplierId") as string
+    const categoryId = formData.get("categoryId") as string
+    const tribeId = formData.get("tribeId") as string
+    const roomId = formData.get("roomId") as string
+    const invoiceNumber = formData.get("invoiceNumber") as string
+    const amount = formData.get("amount") as string
+    const status = formData.get("status") as string
+    const paymentMethod = formData.get("paymentMethod") as string
+    const bankAccount = formData.get("bankAccount") as string
+    const description = formData.get("description") as string
+    const date = formData.get("date") as string
+    const dueDate = formData.get("dueDate") as string
+    const paymentDate = formData.get("paymentDate") as string
+    const documentCount = Number.parseInt(formData.get("documentCount") as string) || 0
 
-  // Extraer datos del formulario
-  const date = formData.get("date") as string
-  const dueDate = formData.get("dueDate") as string
-  const paymentDate = (formData.get("paymentDate") as string) || null
-  const supplierId = Number.parseInt(formData.get("supplierId") as string)
-  const categoryId = Number.parseInt(formData.get("categoryId") as string)
-  const tribeId = formData.get("tribeId") ? Number.parseInt(formData.get("tribeId") as string) : null
-  const roomId = formData.get("roomId") ? Number.parseInt(formData.get("roomId") as string) : null
-  const amount = Number.parseFloat(formData.get("amount") as string)
-  const paymentMethod = formData.get("paymentMethod") as string
-  const status = formData.get("status") as string
-  const invoiceNumber = (formData.get("invoiceNumber") as string) || null
-  const description = (formData.get("description") as string) || null
-  const bankAccount = (formData.get("bankAccount") as string) || null
-  const documentCount = Number.parseInt((formData.get("documentCount") as string) || "0")
+    // Validar datos obligatorios
+    if (!supplierId || !categoryId || !amount || !status || !paymentMethod || !date || !dueDate) {
+      return { success: false, error: "Faltan campos obligatorios" }
+    }
 
-  // Manejar los archivos adjuntos si existen
-  const documentUrls: string[] = []
-  const documentIds: string[] = []
+    // Preparar datos para insertar
+    const expenseData: any = {
+      supplier_id: Number.parseInt(supplierId),
+      category_id: Number.parseInt(categoryId),
+      amount: Number.parseFloat(amount),
+      status,
+      payment_method: paymentMethod,
+      date,
+      due_date: dueDate,
+      created_by: userEmail,
+      updated_by: userEmail,
+    }
 
-  if (documentCount > 0) {
-    try {
-      // Verificar si el bucket existe, si no, crearlo
-      const { data: buckets } = await supabase.storage.listBuckets()
-      const bucketExists = buckets?.some((bucket) => bucket.name === "expense-documents")
+    // Agregar campos opcionales si existen
+    if (tribeId && tribeId !== "none") expenseData.tribe_id = Number.parseInt(tribeId)
+    if (roomId) expenseData.room_id = Number.parseInt(roomId)
+    if (invoiceNumber) expenseData.invoice_number = invoiceNumber
+    if (bankAccount) expenseData.bank_account = bankAccount
+    if (description) expenseData.description = description
+    if (paymentDate) expenseData.payment_date = paymentDate
 
-      if (!bucketExists) {
-        await supabase.storage.createBucket("expense-documents", {
-          public: true,
-          fileSizeLimit: 5242880, // 5MB
-        })
+    // Insertar el gasto en la base de datos
+    const { data, error } = await supabase.from("expenses").insert([expenseData]).select().single()
+
+    if (error) {
+      console.error("Error al crear gasto:", error)
+      return { success: false, error: "Error al registrar el gasto" }
+    }
+
+    // Si hay documentos adjuntos, procesarlos
+    if (documentCount > 0) {
+      const expenseId = data.id
+      const documentUrls = []
+
+      for (let i = 0; i < documentCount; i++) {
+        const file = formData.get(`document_${i}`) as File
+        if (!file) continue
+
+        const fileExt = file.name.split(".").pop()
+        const fileName = `${Date.now()}_${i}.${fileExt}`
+        const filePath = `expenses/${expenseId}/${fileName}`
+
+        const { error: uploadError, data: uploadData } = await supabase.storage.from("documents").upload(filePath, file)
+
+        if (uploadError) {
+          console.error("Error al subir documento:", uploadError)
+          continue
+        }
+
+        const { data: urlData } = supabase.storage.from("documents").getPublicUrl(filePath)
+        documentUrls.push(urlData.publicUrl)
       }
 
-      // Procesar cada archivo
-      for (let i = 0; i < documentCount; i++) {
-        const documentFile = formData.get(`document_${i}`) as File
+      // Actualizar el gasto con las URLs de los documentos
+      if (documentUrls.length > 0) {
+        const { error: updateError } = await supabase
+          .from("expenses")
+          .update({ document_urls: documentUrls })
+          .eq("id", expenseId)
 
-        if (documentFile && documentFile.size > 0) {
-          // Generar un nombre único para el archivo
-          const fileExt = documentFile.name.split(".").pop()
-          const fileName = `${Date.now()}_${i}_${Math.random().toString(36).substring(2, 15)}.${fileExt}`
-
-          // Subir el archivo
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from("expense-documents")
-            .upload(fileName, documentFile, {
-              cacheControl: "3600",
-              upsert: false,
-            })
-
-          if (uploadError) {
-            console.error(`Error al subir el documento ${i}:`, uploadError)
-            continue
-          }
-
-          // Guardar el ID del documento (que es el path en el bucket)
-          documentIds.push(fileName)
-
-          // Obtener la URL pública
-          const { data: urlData } = supabase.storage.from("expense-documents").getPublicUrl(fileName)
-
-          documentUrls.push(urlData.publicUrl)
+        if (updateError) {
+          console.error("Error al actualizar gasto con documentos:", updateError)
         }
       }
-    } catch (error) {
-      console.error("Error en el proceso de carga de documentos:", error)
-      return { success: false, error: `Error en el proceso de carga de documentos: ${error}` }
     }
+
+    revalidatePath("/expenses/list")
+    return { success: true }
+  } catch (error) {
+    console.error("Error inesperado al crear gasto:", error)
+    return { success: false, error: "Error inesperado al procesar la solicitud" }
   }
+}
 
-  // Insertar el gasto en la base de datos
-  const { data, error } = await supabase
-    .from("expenses")
-    .insert([
-      {
-        date,
-        due_date: dueDate,
-        payment_date: paymentDate,
-        supplier_id: supplierId,
-        category_id: categoryId,
-        tribe_id: tribeId,
-        room_id: roomId,
-        amount,
-        payment_method: paymentMethod,
-        status,
-        invoice_number: invoiceNumber,
-        description,
-        bank_account: bankAccount,
-        document_urls: documentUrls.length > 0 ? documentUrls : null,
-        document_ids: documentIds.length > 0 ? documentIds : null,
-        created_by: createdBy,
-      },
-    ])
-    .select()
+// Función para actualizar un gasto existente
+export async function updateExpense(expenseId: number, formData: FormData) {
+  try {
+    const supabase = createServerSupabaseClient()
 
-  if (error) {
-    console.error("Error al crear el gasto:", error)
-    return { success: false, error: error.message }
+    // Obtener el usuario actual
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userEmail = user?.email || "sistema"
+
+    // Extraer datos del formulario
+    const supplierId = formData.get("supplierId") as string
+    const categoryId = formData.get("categoryId") as string
+    const tribeId = formData.get("tribeId") as string
+    const roomId = formData.get("roomId") as string
+    const invoiceNumber = formData.get("invoiceNumber") as string
+    const amount = formData.get("amount") as string
+    const status = formData.get("status") as string
+    const paymentMethod = formData.get("paymentMethod") as string
+    const bankAccount = formData.get("bankAccount") as string
+    const description = formData.get("description") as string
+    const date = formData.get("date") as string
+    const dueDate = formData.get("dueDate") as string
+    const paymentDate = formData.get("paymentDate") as string
+    const documentsToRemove = formData.get("documentsToRemove") as string
+
+    // Validar datos obligatorios
+    if (!supplierId || !categoryId || !amount || !status || !paymentMethod || !date || !dueDate) {
+      return { success: false, error: "Faltan campos obligatorios" }
+    }
+
+    // Obtener el gasto actual para comparar cambios
+    const { data: currentExpense, error: fetchError } = await supabase
+      .from("expenses")
+      .select("*")
+      .eq("id", expenseId)
+      .single()
+
+    if (fetchError) {
+      console.error("Error al obtener gasto actual:", fetchError)
+      return { success: false, error: "Error al obtener el gasto actual" }
+    }
+
+    // Preparar datos para actualizar
+    const expenseData: any = {
+      supplier_id: Number.parseInt(supplierId),
+      category_id: Number.parseInt(categoryId),
+      amount: Number.parseFloat(amount),
+      status,
+      payment_method: paymentMethod,
+      date,
+      due_date: dueDate,
+      updated_by: userEmail,
+    }
+
+    // Agregar campos opcionales si existen
+    if (tribeId && tribeId !== "none") {
+      expenseData.tribe_id = Number.parseInt(tribeId)
+    } else {
+      expenseData.tribe_id = null
+    }
+
+    if (roomId) {
+      expenseData.room_id = Number.parseInt(roomId)
+    } else {
+      expenseData.room_id = null
+    }
+
+    if (invoiceNumber) {
+      expenseData.invoice_number = invoiceNumber
+    } else {
+      expenseData.invoice_number = null
+    }
+
+    if (bankAccount) {
+      expenseData.bank_account = bankAccount
+    } else {
+      expenseData.bank_account = null
+    }
+
+    if (description) {
+      expenseData.description = description
+    } else {
+      expenseData.description = null
+    }
+
+    if (paymentDate) {
+      expenseData.payment_date = paymentDate
+    } else {
+      expenseData.payment_date = null
+    }
+
+    // Procesar documentos a eliminar
+    let documentUrls = currentExpense.document_urls || []
+    if (documentsToRemove) {
+      const indexesToRemove = JSON.parse(documentsToRemove) as number[]
+      documentUrls = documentUrls.filter((_, index) => !indexesToRemove.includes(index))
+    }
+
+    // Procesar nuevos documentos
+    const files = formData.getAll("documents") as File[]
+    if (files && files.length > 0) {
+      for (const file of files) {
+        if (!file.name) continue // Skip if not a valid file
+
+        const fileExt = file.name.split(".").pop()
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 15)}.${fileExt}`
+        const filePath = `expenses/${expenseId}/${fileName}`
+
+        const { error: uploadError, data: uploadData } = await supabase.storage.from("documents").upload(filePath, file)
+
+        if (uploadError) {
+          console.error("Error al subir documento:", uploadError)
+          continue
+        }
+
+        const { data: urlData } = supabase.storage.from("documents").getPublicUrl(filePath)
+        documentUrls.push(urlData.publicUrl)
+      }
+    }
+
+    // Actualizar el campo document_urls
+    expenseData.document_urls = documentUrls
+
+    // Actualizar el gasto en la base de datos
+    const { data, error } = await supabase.from("expenses").update(expenseData).eq("id", expenseId).select().single()
+
+    if (error) {
+      console.error("Error al actualizar gasto:", error)
+      return { success: false, error: "Error al actualizar el gasto" }
+    }
+
+    revalidatePath("/expenses/list")
+    revalidatePath(`/expenses/${expenseId}/edit`)
+    return { success: true }
+  } catch (error) {
+    console.error("Error inesperado al actualizar gasto:", error)
+    return { success: false, error: "Error inesperado al procesar la solicitud" }
   }
+}
 
-  // Revalidar la ruta para actualizar los datos
-  revalidatePath("/expenses")
-  revalidatePath("/expenses/list")
+// Función para eliminar un gasto
+export async function deleteExpense(expenseId: number) {
+  try {
+    const supabase = createServerSupabaseClient()
 
-  return { success: true, data }
+    // Eliminar el gasto
+    const { error } = await supabase.from("expenses").delete().eq("id", expenseId)
+
+    if (error) {
+      console.error("Error al eliminar gasto:", error)
+      return { success: false, error: "Error al eliminar el gasto" }
+    }
+
+    // También podríamos eliminar los archivos asociados en el storage
+    // pero los mantendremos por ahora para tener un historial
+
+    revalidatePath("/expenses/list")
+    return { success: true }
+  } catch (error) {
+    console.error("Error inesperado al eliminar gasto:", error)
+    return { success: false, error: "Error inesperado al procesar la solicitud" }
+  }
 }
 
 export async function getExpenses(filters?: DateFilter) {
-  const supabase = createServerSupabaseClient()
-
   try {
+    const supabase = createServerSupabaseClient()
+
     // Iniciar la consulta base
     let query = supabase.from("expenses").select(`
         *,
@@ -277,9 +544,9 @@ export async function getExpenses(filters?: DateFilter) {
 }
 
 export async function getExpensesSummary(filters?: DateFilter) {
-  const supabase = createServerSupabaseClient()
-
   try {
+    const supabase = createServerSupabaseClient()
+
     // Iniciar la consulta base
     let query = supabase.from("expenses").select(`
         amount,
@@ -399,280 +666,29 @@ export async function getExpensesSummary(filters?: DateFilter) {
 }
 
 export async function getExpenseById(id: number) {
-  const supabase = createServerSupabaseClient()
-
-  const { data, error } = await supabase
-    .from("expenses")
-    .select(`
-      *,
-      suppliers(id, name),
-      expense_categories(id, name),
-      tribes(id, name),
-      rooms(id, room_number)
-    `)
-    .eq("id", id)
-    .single()
-
-  if (error) {
-    console.error("Error al obtener el gasto:", error)
-    return null
-  }
-
-  return data
-}
-
-// Modificar la función updateExpense para incluir bank_account
-export async function updateExpense(id: number, formData: FormData) {
   try {
     const supabase = createServerSupabaseClient()
-    const user = await getCurrentUser()
 
-    if (!user) {
-      return { success: false, error: "No se ha encontrado un usuario autenticado" }
-    }
-
-    // Extraer datos del formulario
-    const supplierId = formData.get("supplierId") as string
-    const categoryId = formData.get("categoryId") as string
-    const tribeId = (formData.get("tribeId") as string) || null
-    const roomId = (formData.get("roomId") as string) || null
-    const amount = formData.get("amount") as string
-    const status = formData.get("status") as string
-    const paymentMethod = formData.get("paymentMethod") as string
-    const description = formData.get("description") as string
-    const invoiceNumber = formData.get("invoiceNumber") as string
-    const date = formData.get("date") as string
-    const dueDate = formData.get("dueDate") as string
-    const paymentDate = (formData.get("paymentDate") as string) || null
-    const bankAccount = (formData.get("bankAccount") as string) || null
-
-    // Obtener información sobre documentos a eliminar
-    const documentsToRemoveStr = formData.get("documentsToRemove") as string
-    const documentsToRemove = documentsToRemoveStr ? JSON.parse(documentsToRemoveStr) : []
-
-    // Obtener el gasto actual para acceder a sus documentos
-    const { data: currentExpense } = await supabase
+    const { data, error } = await supabase
       .from("expenses")
-      .select("document_urls, document_ids")
+      .select(`
+        *,
+        suppliers(id, name),
+        expense_categories(id, name),
+        tribes(id, name),
+        rooms(id, room_number)
+      `)
       .eq("id", id)
       .single()
 
-    // Inicializar arrays para documentos
-    let documentUrls: string[] = []
-    let documentIds: string[] = []
-
-    // Mantener documentos existentes que no se van a eliminar
-    if (currentExpense?.document_urls && currentExpense?.document_ids) {
-      documentUrls = [...currentExpense.document_urls]
-      documentIds = [...currentExpense.document_ids]
-
-      // Eliminar documentos marcados para eliminación
-      documentsToRemove.forEach((index: number) => {
-        if (index >= 0 && index < documentUrls.length) {
-          documentUrls.splice(index, 1)
-          documentIds.splice(index, 1)
-        }
-      })
-    }
-
-    // Procesar nuevos documentos
-    const documents = formData.getAll("documents") as File[]
-
-    if (documents && documents.length > 0) {
-      for (const document of documents) {
-        if (document.size > 0) {
-          const fileExt = document.name.split(".").pop()
-          const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`
-          const filePath = `expenses/${id}/${fileName}`
-
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from("documents")
-            .upload(filePath, document)
-
-          if (uploadError) {
-            console.error("Error al subir el documento:", uploadError)
-            continue
-          }
-
-          // Obtener URL pública
-          const { data: publicUrlData } = await supabase.storage.from("documents").getPublicUrl(filePath)
-
-          if (publicUrlData) {
-            documentUrls.push(publicUrlData.publicUrl)
-            documentIds.push(filePath)
-          }
-        }
-      }
-    }
-
-    // Actualizar el gasto en la base de datos
-    const { data, error } = await supabase
-      .from("expenses")
-      .update({
-        supplier_id: Number.parseInt(supplierId),
-        category_id: Number.parseInt(categoryId),
-        tribe_id: tribeId ? Number.parseInt(tribeId) : null,
-        room_id: roomId ? Number.parseInt(roomId) : null,
-        amount: Number.parseFloat(amount),
-        status: status,
-        payment_method: paymentMethod,
-        description: description,
-        invoice_number: invoiceNumber,
-        date: date,
-        due_date: dueDate,
-        payment_date: paymentDate,
-        bank_account: bankAccount,
-        document_urls: documentUrls,
-        document_ids: documentIds,
-        updated_by: user.email,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id)
-      .select()
-
     if (error) {
-      console.error("Error al actualizar el gasto:", error)
-      return { success: false, error: error.message }
+      console.error("Error al obtener el gasto:", error)
+      return null
     }
 
-    revalidatePath("/expenses/list")
-    return { success: true, data }
+    return data
   } catch (error) {
-    console.error("Error en updateExpense:", error)
-    return { success: false, error: "Error al procesar la solicitud" }
+    console.error("Error inesperado al obtener el gasto:", error)
+    return null
   }
-}
-
-export async function createSupplier(supplierData: {
-  name: string
-  contact_person: string | null
-  phone: string | null
-  email: string | null
-}) {
-  try {
-    console.log("Iniciando createSupplier con datos:", supplierData)
-
-    const supabase = createServerSupabaseClient()
-
-    // Validar que el nombre no esté vacío
-    if (!supplierData.name || supplierData.name.trim() === "") {
-      console.error("Error: El nombre del proveedor es obligatorio")
-      return { success: false, error: "El nombre del proveedor es obligatorio" }
-    }
-
-    // Validar formato de email si se proporciona
-    if (supplierData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supplierData.email)) {
-      console.error("Error: El formato del email no es válido")
-      return { success: false, error: "El formato del email no es válido" }
-    }
-
-    // Verificar si ya existe un proveedor con el mismo nombre
-    const { data: existingSupplier, error: checkError } = await supabase
-      .from("suppliers")
-      .select("id")
-      .eq("name", supplierData.name)
-      .maybeSingle()
-
-    if (checkError) {
-      console.error("Error al verificar proveedor existente:", checkError)
-      return { success: false, error: "Error al verificar si el proveedor ya existe" }
-    }
-
-    if (existingSupplier) {
-      console.error("Error: Ya existe un proveedor con este nombre")
-      return { success: false, error: "Ya existe un proveedor con este nombre" }
-    }
-
-    // Preparar los datos para insertar - CORREGIDO: eliminado el campo created_by que no existe en la tabla
-    const supplierToInsert = {
-      name: supplierData.name,
-      contact_person: supplierData.contact_person,
-      phone: supplierData.phone,
-      email: supplierData.email,
-      created_at: new Date().toISOString(),
-    }
-
-    console.log("Datos a insertar:", supplierToInsert)
-
-    // Insertar el proveedor en la base de datos
-    const { data, error } = await supabase.from("suppliers").insert([supplierToInsert]).select()
-
-    if (error) {
-      console.error("Error al crear el proveedor:", error)
-      return { success: false, error: error.message }
-    }
-
-    // Verificar que se hayan devuelto datos
-    if (!data || data.length === 0) {
-      console.error("No se recibieron datos después de insertar el proveedor")
-      return { success: false, error: "Error al crear el proveedor: no se recibieron datos" }
-    }
-
-    console.log("Proveedor creado exitosamente:", data[0])
-
-    // Revalidar rutas para actualizar los datos en la UI
-    revalidatePath("/expenses/new")
-    revalidatePath("/expenses/[id]/edit")
-
-    return { success: true, data: data[0] }
-  } catch (error) {
-    console.error("Error inesperado en createSupplier:", error)
-    return { success: false, error: `Error inesperado: ${error}` }
-  }
-}
-
-export async function deleteExpense(id: number) {
-  const supabase = createServerSupabaseClient()
-
-  // Primero, obtener el gasto para verificar si tiene un documento adjunto
-  const { data: expense, error: fetchError } = await supabase
-    .from("expenses")
-    .select("document_url, document_id, document_urls, document_ids")
-    .eq("id", id)
-    .single()
-
-  if (fetchError) {
-    console.error("Error al obtener el gasto para eliminar:", fetchError)
-    return { success: false, error: fetchError.message }
-  }
-
-  // Eliminar documentos múltiples si existen
-  if (expense?.document_ids && Array.isArray(expense.document_ids) && expense.document_ids.length > 0) {
-    try {
-      const { error: deleteFilesError } = await supabase.storage.from("expense-documents").remove(expense.document_ids)
-
-      if (deleteFilesError) {
-        console.error("Error al eliminar los documentos adjuntos:", deleteFilesError)
-      }
-    } catch (error) {
-      console.error("Error al procesar la eliminación de los documentos:", error)
-    }
-  }
-  // Si hay un documento adjunto individual, intentar eliminarlo del storage
-  else if (expense?.document_id) {
-    try {
-      // Eliminar el archivo del bucket usando el document_id
-      const { error: deleteFileError } = await supabase.storage.from("expense-documents").remove([expense.document_id])
-
-      if (deleteFileError) {
-        console.error("Error al eliminar el documento adjunto:", deleteFileError)
-      }
-    } catch (error) {
-      console.error("Error al procesar la eliminación del documento:", error)
-    }
-  }
-
-  // Eliminar el gasto de la base de datos
-  const { error } = await supabase.from("expenses").delete().eq("id", id)
-
-  if (error) {
-    console.error("Error al eliminar el gasto:", error)
-    return { success: false, error: error.message }
-  }
-
-  // Revalidar la ruta para actualizar los datos
-  revalidatePath("/expenses")
-  revalidatePath("/expenses/list")
-
-  return { success: true }
 }
