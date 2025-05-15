@@ -1,381 +1,435 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import type { Payment } from "@/types/payment"
-import PaymentTable from "./payment-table"
-import PaymentFiltersSimple from "./payment-filters-simple"
-import { Button } from "@/components/ui/button"
-import { PlusCircle, RefreshCw, Home } from "lucide-react"
+import { getPayments, deletePayment, type DateFilter } from "@/app/actions"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { format } from "date-fns"
+import { es } from "date-fns/locale"
 import Link from "next/link"
-import { useToast } from "@/hooks/use-toast"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { PaymentSummary } from "@/components/payment-summary"
+import { Button } from "@/components/ui/button"
+import { FileText, ExternalLink, Loader2, Edit, Plus } from "lucide-react"
+import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog"
+import { toast } from "@/components/ui/use-toast"
+import { Toaster } from "@/components/ui/toaster"
+import PaymentFilters from "@/components/payments/payment-filters"
+import type { DateRange } from "react-day-picker"
 
 export default function PaymentDashboard() {
-  const [payments, setPayments] = useState<Payment[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [filters, setFilters] = useState({
-    dateRange: null,
-    tribe: "",
-    room: "",
-    paymentMethod: "",
-    search: "",
-  })
-  const [page, setPage] = useState(1)
-  const [hasMore, setHasMore] = useState(false)
-  const pageSize = 50
-  const supabase = createClientComponentClient()
-  const { toast } = useToast()
+  const [payments, setPayments] = useState<any[]>([])
   const [summary, setSummary] = useState({
     total: 0,
     count: 0,
     efectivo: 0,
     transferencia: 0,
   })
+  const [loading, setLoading] = useState(true)
+  const [filters, setFilters] = useState({
+    dateRange: null as DateRange | null,
+    tribe: "",
+    room: "",
+    paymentMethod: "",
+    search: "",
+  })
+  const [error, setError] = useState<string | null>(null)
 
-  // Función para obtener pagos directamente con joins
-  const fetchPayments = async () => {
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [filters])
+
+  const loadData = async () => {
     setLoading(true)
     setError(null)
-
     try {
-      console.log("Iniciando consulta directa a la tabla payments con joins")
+      // Convertir filtros de UI a formato para la API
+      const apiFilters: DateFilter = {}
 
-      // Construir la consulta SQL directa
-      let query = `
-        SELECT 
-          p.*,
-          t.name AS tribe_name,
-          r.room_number
-        FROM 
-          payments p
-        JOIN 
-          tribes t ON p.tribe_id = t.id
-        JOIN 
-          rooms r ON p.room_id = r.id
-      `
-
-      // Condiciones para los filtros
-      const conditions = []
-      const params = {}
-
-      // Filtro de fecha
       if (filters.dateRange?.from) {
-        const fromDate = new Date(filters.dateRange.from)
-        fromDate.setHours(0, 0, 0, 0)
-        conditions.push(`p.entry_date >= :from_date`)
-        params.from_date = fromDate.toISOString().split("T")[0]
+        apiFilters.startDate = format(filters.dateRange.from, "yyyy-MM-dd")
       }
 
       if (filters.dateRange?.to) {
-        const toDate = new Date(filters.dateRange.to)
-        toDate.setHours(23, 59, 59, 999)
-        conditions.push(`p.entry_date <= :to_date`)
-        params.to_date = toDate.toISOString().split("T")[0]
+        apiFilters.endDate = format(filters.dateRange.to, "yyyy-MM-dd")
       }
 
-      // Filtro de tribu
-      if (filters.tribe && filters.tribe !== "all") {
-        conditions.push(`p.tribe_id = :tribe_id`)
-        params.tribe_id = filters.tribe
+      // Obtener datos de pagos
+      let paymentsData = await getPayments(apiFilters)
+
+      // Aplicar filtros adicionales en el cliente
+      if (paymentsData && paymentsData.length > 0) {
+        // Filtrar por tribu
+        if (filters.tribe && filters.tribe !== "all") {
+          paymentsData = paymentsData.filter(
+            (payment) => payment.tribe_id && payment.tribe_id.toString() === filters.tribe,
+          )
+        }
+
+        // Filtrar por habitación
+        if (filters.room && filters.room !== "all") {
+          paymentsData = paymentsData.filter(
+            (payment) => payment.room_id && payment.room_id.toString() === filters.room,
+          )
+        }
+
+        // Filtrar por método de pago
+        if (filters.paymentMethod && filters.paymentMethod !== "all") {
+          paymentsData = paymentsData.filter((payment) => payment.payment_method === filters.paymentMethod)
+        }
+
+        // Filtrar por búsqueda de texto
+        if (filters.search) {
+          const searchLower = filters.search.toLowerCase()
+          paymentsData = paymentsData.filter(
+            (payment) =>
+              (payment.tribes?.name && payment.tribes.name.toLowerCase().includes(searchLower)) ||
+              (payment.rooms?.room_number && payment.rooms.room_number.toLowerCase().includes(searchLower)) ||
+              (payment.comments && payment.comments.toLowerCase().includes(searchLower)),
+          )
+        }
       }
 
-      // Filtro de habitación
-      if (filters.room && filters.room !== "all") {
-        conditions.push(`p.room_id = :room_id`)
-        params.room_id = filters.room
-      }
+      // Calcular resumen basado en los datos filtrados
+      const summaryData = calculateSummary(paymentsData)
 
-      // Filtro de método de pago
-      if (filters.paymentMethod && filters.paymentMethod !== "all") {
-        conditions.push(`p.payment_method = :payment_method`)
-        params.payment_method = filters.paymentMethod
-      }
-
-      // Filtro de búsqueda
-      if (filters.search) {
-        conditions.push(`p.comments ILIKE :search`)
-        params.search = `%${filters.search}%`
-      }
-
-      // Agregar condiciones a la consulta
-      if (conditions.length > 0) {
-        query += ` WHERE ${conditions.join(" AND ")}`
-      }
-
-      // Ordenar por fecha
-      query += ` ORDER BY p.entry_date DESC`
-
-      // Paginación
-      query += ` LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`
-
-      console.log("Consulta SQL:", query)
-      console.log("Parámetros:", params)
-
-      // Ejecutar la consulta
-      const { data, error } = await supabase.rpc("execute_sql", {
-        query_text: query,
-        query_params: params,
-      })
-
-      if (error) {
-        console.error("Error en la consulta SQL:", error)
-        throw error
-      }
-
-      console.log("Datos obtenidos:", data?.length || 0, "registros")
-      console.log("Muestra de datos:", data?.[0])
-
-      // Mapear los datos
-      const mappedData = mapPaymentsData(data || [])
-      setPayments(mappedData)
-
-      // Calcular resumen
-      calculateSummary(mappedData)
-
-      // Verificar si hay más páginas
-      const countQuery = `
-        SELECT COUNT(*) 
-        FROM payments p
-        JOIN tribes t ON p.tribe_id = t.id
-        JOIN rooms r ON p.room_id = r.id
-      `
-
-      let countConditions = ""
-      if (conditions.length > 0) {
-        countConditions = ` WHERE ${conditions.join(" AND ")}`
-      }
-
-      const { data: countData, error: countError } = await supabase.rpc("execute_sql", {
-        query_text: countQuery + countConditions,
-        query_params: params,
-      })
-
-      if (countError) {
-        console.error("Error en la consulta de conteo:", countError)
-      } else {
-        const totalCount = Number.parseInt(countData?.[0]?.count || "0")
-        setHasMore(totalCount > page * pageSize)
-      }
+      setPayments(paymentsData || [])
+      setSummary(summaryData)
     } catch (error) {
-      console.error("Error fetching payments:", error)
-      setError(`No se pudieron cargar los cobros: ${error.message || "Error desconocido"}`)
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los cobros. Por favor, intente de nuevo.",
-        variant: "destructive",
-      })
+      console.error("Error al cargar los datos:", error)
+      setError("Ha ocurrido un error al cargar los datos. Por favor, intente nuevamente.")
     } finally {
       setLoading(false)
     }
   }
 
-  // Mapear los datos con los nombres de tribus y habitaciones
-  const mapPaymentsData = (data: any[]): Payment[] => {
-    if (!data || data.length === 0) return []
-
-    return data.map((item) => ({
-      id: item.id,
-      date: item.entry_date,
-      due_date: item.estimated_payment_date,
-      payment_date: item.actual_payment_date,
-      client: {
-        id: item.tribe_id,
-        name: `${item.tribe_name} - ${item.room_number}`,
-      },
-      tribe_name: item.tribe_name,
-      room_number: item.room_number,
-      amount: Number.parseFloat(item.amount),
-      rent_amount: Number.parseFloat(item.rent_amount || "0"),
-      services_amount: Number.parseFloat(item.services_amount || "0"),
-      status: item.actual_payment_date ? "paid" : "pending",
-      payment_method: item.payment_method,
-      invoice_number: "",
-      description: item.comments,
-      document_url: item.document_url || (item.document_urls && item.document_urls[0]),
-      document_urls: item.document_urls,
-    }))
-  }
-
-  const calculateSummary = (data: Payment[]) => {
-    let total = 0
-    let efectivo = 0
-    let transferencia = 0
-
-    data.forEach((payment) => {
-      total += payment.amount
-      if (payment.payment_method === "efectivo") {
-        efectivo += payment.amount
-      } else {
-        transferencia += payment.amount
+  // Función para calcular el resumen basado en los datos filtrados
+  const calculateSummary = (data: any[]) => {
+    if (!data || data.length === 0) {
+      return {
+        total: 0,
+        count: 0,
+        efectivo: 0,
+        transferencia: 0,
       }
-    })
+    }
 
-    setSummary({
-      total,
-      count: data.length,
-      efectivo,
-      transferencia,
-    })
-  }
+    return data.reduce(
+      (summary, payment) => {
+        const amount = Number(payment?.amount || 0)
 
-  // Cargar datos iniciales
-  useEffect(() => {
-    // Usar un enfoque alternativo para obtener los datos
-    const fetchInitialData = async () => {
-      try {
-        setLoading(true)
+        // Incrementar total y contador
+        summary.total += amount
+        summary.count += 1
 
-        // Consulta SQL directa para obtener los primeros 50 pagos con sus relaciones
-        const query = `
-          SELECT 
-            p.*,
-            t.name AS tribe_name,
-            r.room_number
-          FROM 
-            payments p
-          JOIN 
-            tribes t ON p.tribe_id = t.id
-          JOIN 
-            rooms r ON p.room_id = r.id
-          ORDER BY 
-            p.entry_date DESC
-          LIMIT 50
-        `
-
-        const { data, error } = await supabase
-          .from("payments")
-          .select(`
-            *,
-            tribes:tribe_id (name),
-            rooms:room_id (room_number)
-          `)
-          .order("entry_date", { ascending: false })
-          .limit(50)
-
-        if (error) {
-          console.error("Error en la consulta inicial:", error)
-          throw error
+        // Incrementar por método de pago
+        if (payment.payment_method === "efectivo") {
+          summary.efectivo += amount
+        } else if (payment.payment_method === "transferencia") {
+          summary.transferencia += amount
         }
 
-        console.log("Datos iniciales obtenidos:", data?.length || 0, "registros")
-        console.log("Muestra de datos:", data?.[0])
+        return summary
+      },
+      {
+        total: 0,
+        count: 0,
+        efectivo: 0,
+        transferencia: 0,
+      },
+    )
+  }
 
-        // Mapear los datos
-        const mappedData = data.map((item) => ({
-          id: item.id,
-          date: item.entry_date,
-          due_date: item.estimated_payment_date,
-          payment_date: item.actual_payment_date,
-          client: {
-            id: item.tribe_id,
-            name: `${item.tribes?.name || "Tribu " + item.tribe_id} - ${item.rooms?.room_number || "Habitación " + item.room_id}`,
-          },
-          tribe_name: item.tribes?.name || "",
-          room_number: item.rooms?.room_number || "",
-          amount: Number.parseFloat(item.amount),
-          rent_amount: Number.parseFloat(item.rent_amount || "0"),
-          services_amount: Number.parseFloat(item.services_amount || "0"),
-          status: item.actual_payment_date ? "paid" : "pending",
-          payment_method: item.payment_method,
-          invoice_number: "",
-          description: item.comments,
-          document_url: item.document_url || (item.document_urls && item.document_urls[0]),
-          document_urls: item.document_urls,
-        }))
+  const handleDelete = async (id: number) => {
+    try {
+      const result = await deletePayment(id)
 
-        setPayments(mappedData)
-        calculateSummary(mappedData)
-      } catch (error) {
-        console.error("Error fetching initial data:", error)
-        setError(`No se pudieron cargar los cobros: ${error.message || "Error desconocido"}`)
-      } finally {
-        setLoading(false)
+      if (result.success) {
+        toast({
+          title: "Cobro eliminado",
+          description: "El cobro ha sido eliminado correctamente.",
+        })
+        // Recargar los datos
+        loadData()
+      } else {
+        toast({
+          title: "Error",
+          description: result.error || "Ha ocurrido un error al eliminar el cobro.",
+          variant: "destructive",
+        })
       }
+    } catch (error) {
+      console.error("Error al eliminar el cobro:", error)
+      toast({
+        title: "Error",
+        description: "Ha ocurrido un error al procesar la solicitud.",
+        variant: "destructive",
+      })
     }
+  }
 
-    fetchInitialData()
-  }, [])
-
-  // Cargar datos filtrados cuando cambian los filtros o la página
-  useEffect(() => {
-    if (Object.values(filters).some((value) => value !== "" && value !== null) || page > 1) {
-      fetchPayments()
+  const getPaymentMethodLabel = (method: string) => {
+    switch (method) {
+      case "efectivo":
+        return "Efectivo"
+      case "transferencia":
+        return "Transferencia"
+      default:
+        return method
     }
-  }, [filters, page])
+  }
 
-  const loadMorePayments = () => {
-    const nextPage = page + 1
-    setPage(nextPage)
+  const getPaymentDetails = (payment: any) => {
+    if (!payment) return <div>No hay detalles disponibles</div>
+
+    // Ensure all date fields are valid before formatting
+    const hasValidEntryDate = payment?.entry_date && !isNaN(new Date(payment.entry_date).getTime())
+    const hasValidEstimatedDate =
+      payment?.estimated_payment_date && !isNaN(new Date(payment.estimated_payment_date).getTime())
+    const hasValidActualDate = payment?.actual_payment_date && !isNaN(new Date(payment.actual_payment_date).getTime())
+
+    return (
+      <div className="space-y-2 text-sm">
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <span className="font-semibold">Tribu:</span> {payment.tribes?.name || "Sin tribu"}
+          </div>
+          <div>
+            <span className="font-semibold">Habitación:</span> {payment.rooms?.room_number || "Sin habitación"}
+          </div>
+          <div>
+            <span className="font-semibold">Importe total:</span> ${Number(payment?.amount || 0).toFixed(2)}
+          </div>
+          <div>
+            <span className="font-semibold">Alquiler:</span> ${Number(payment?.rent_amount || 0).toFixed(2)}
+          </div>
+          <div>
+            <span className="font-semibold">Servicios:</span> ${Number(payment?.services_amount || 0).toFixed(2)}
+          </div>
+          <div>
+            <span className="font-semibold">Método de pago:</span>{" "}
+            {getPaymentMethodLabel(payment?.payment_method || "")}
+          </div>
+          <div>
+            <span className="font-semibold">Fecha de ingreso:</span>{" "}
+            {hasValidEntryDate ? format(new Date(payment.entry_date), "dd/MM/yyyy", { locale: es }) : "-"}
+          </div>
+          <div>
+            <span className="font-semibold">Fecha estimada de pago:</span>{" "}
+            {hasValidEstimatedDate
+              ? format(new Date(payment.estimated_payment_date), "dd/MM/yyyy", { locale: es })
+              : "-"}
+          </div>
+          {hasValidActualDate && (
+            <div>
+              <span className="font-semibold">Fecha real de pago:</span>{" "}
+              {format(new Date(payment.actual_payment_date), "dd/MM/yyyy", { locale: es })}
+            </div>
+          )}
+          {payment?.created_by && (
+            <div>
+              <span className="font-semibold">Creado por:</span> {payment.created_by}
+            </div>
+          )}
+        </div>
+        {payment?.comments && (
+          <div>
+            <span className="font-semibold">Comentarios:</span> {payment.comments}
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-        <PaymentFiltersSimple filters={filters} setFilters={setFilters} />
-
-        <div className="flex gap-2 ml-auto">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setPage(1)
-              fetchPayments()
-            }}
-            disabled={loading}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-            Actualizar
+      <div className="flex justify-end">
+        <Link href="/payments/new">
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo Cobro
           </Button>
-
-          <Link href="/payments/new">
-            <Button size="sm">
-              <PlusCircle className="h-4 w-4 mr-2" />
-              Nuevo Cobro
-            </Button>
-          </Link>
-
-          <Link href="/">
-            <Button variant="outline" size="sm">
-              <Home className="h-4 w-4 mr-2" />
-              Inicio
-            </Button>
-          </Link>
-        </div>
+        </Link>
       </div>
 
-      {/* Resumen de cobros */}
-      <PaymentSummary
-        total={summary.total}
-        count={summary.count}
-        efectivo={summary.efectivo}
-        transferencia={summary.transferencia}
-      />
+      <Card>
+        <CardHeader>
+          <CardTitle>Filtros</CardTitle>
+          <CardDescription>Filtra los cobros por diferentes criterios</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <PaymentFilters filters={filters} setFilters={setFilters} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Resumen de Cobros</CardTitle>
+          <CardDescription>
+            {loading ? "Cargando..." : `${summary.count} cobros por un total de $${summary.total.toFixed(2)}`}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Total</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">${summary.total.toFixed(2)}</p>
+                <p className="text-sm text-muted-foreground">{summary.count} cobros</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Efectivo</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">${summary.efectivo.toFixed(2)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Transferencia</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">${summary.transferencia.toFixed(2)}</p>
+              </CardContent>
+            </Card>
+          </div>
+        </CardContent>
+      </Card>
 
       {error && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <Card className="border-red-300">
+          <CardContent className="p-4">
+            <div className="flex items-center text-red-600">
+              <p>{error}</p>
+              <Button variant="outline" size="sm" className="ml-auto" onClick={() => loadData()}>
+                Reintentar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      <PaymentTable payments={payments} loading={loading} />
+      <Card>
+        <CardHeader className="bg-gradient-to-r from-blue-500 to-purple-700 text-white">
+          <CardTitle>Cobros registrados</CardTitle>
+          <CardDescription className="text-gray-100">
+            {loading ? "Cargando..." : `${payments.length} registros encontrados`}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="flex justify-center items-center py-20">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha Ingreso</TableHead>
+                    <TableHead>Fecha Est. Pago</TableHead>
+                    <TableHead>Fecha Real Pago</TableHead>
+                    <TableHead>Tribu</TableHead>
+                    <TableHead>Habitación</TableHead>
+                    <TableHead>Importe Total</TableHead>
+                    <TableHead>Alquiler</TableHead>
+                    <TableHead>Servicios</TableHead>
+                    <TableHead>Método</TableHead>
+                    <TableHead>Documento</TableHead>
+                    <TableHead>Creado por</TableHead>
+                    <TableHead>Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payments && payments.length > 0 ? (
+                    payments.map((payment: any) => {
+                      // Ensure all required date fields exist before formatting
+                      const hasValidEntryDate = payment?.entry_date && !isNaN(new Date(payment.entry_date).getTime())
+                      const hasValidEstimatedDate =
+                        payment?.estimated_payment_date && !isNaN(new Date(payment.estimated_payment_date).getTime())
+                      const hasValidActualDate =
+                        payment?.actual_payment_date && !isNaN(new Date(payment.actual_payment_date).getTime())
 
-      {hasMore && (
-        <div className="flex justify-center mt-4">
-          <Button onClick={loadMorePayments} disabled={loading} variant="outline">
-            {loading ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Cargando...
-              </>
-            ) : (
-              "Cargar más registros"
-            )}
-          </Button>
-        </div>
-      )}
+                      return (
+                        <TableRow key={payment?.id || Math.random().toString()}>
+                          <TableCell>
+                            {hasValidEntryDate
+                              ? format(new Date(payment.entry_date), "dd/MM/yyyy", { locale: es })
+                              : "-"}
+                          </TableCell>
+                          <TableCell>
+                            {hasValidEstimatedDate
+                              ? format(new Date(payment.estimated_payment_date), "dd/MM/yyyy", { locale: es })
+                              : "-"}
+                          </TableCell>
+                          <TableCell>
+                            {hasValidActualDate
+                              ? format(new Date(payment.actual_payment_date), "dd/MM/yyyy", { locale: es })
+                              : "-"}
+                          </TableCell>
+                          <TableCell>{payment.tribes?.name || "Sin tribu"}</TableCell>
+                          <TableCell>{payment.rooms?.room_number || "Sin habitación"}</TableCell>
+                          <TableCell>${Number(payment?.amount || 0).toFixed(2)}</TableCell>
+                          <TableCell>${Number(payment?.rent_amount || 0).toFixed(2)}</TableCell>
+                          <TableCell>${Number(payment?.services_amount || 0).toFixed(2)}</TableCell>
+                          <TableCell>{getPaymentMethodLabel(payment?.payment_method || "")}</TableCell>
+                          <TableCell>
+                            {payment?.document_urls && payment.document_urls.length > 0 ? (
+                              <a
+                                href={payment.document_urls[0]}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center text-blue-600 hover:text-blue-800"
+                                title="Ver documento adjunto"
+                              >
+                                <FileText className="h-5 w-5 mr-1" />
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{payment?.created_by || "-"}</TableCell>
+                          <TableCell>
+                            <div className="flex space-x-1">
+                              <Link href={`/payments/${payment?.id}/edit`}>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Editar cobro">
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              </Link>
+                              <DeleteConfirmationDialog
+                                title="Eliminar cobro"
+                                description="¿Estás seguro de que deseas eliminar este cobro? Esta acción no se puede deshacer."
+                                onConfirm={() => handleDelete(payment?.id)}
+                                triggerClassName="h-8 w-auto px-2"
+                                variant="ghost"
+                                itemDetails={getPaymentDetails(payment)}
+                              />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={12} className="text-center py-10">
+                        No hay cobros registrados que coincidan con los filtros
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      <Toaster />
     </div>
   )
 }

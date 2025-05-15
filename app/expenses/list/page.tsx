@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { getExpenses, getExpensesSummary, deleteExpense, type DateFilter } from "@/app/expense-actions"
+import { getExpenses, deleteExpense, type DateFilter } from "@/app/expense-actions"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { format } from "date-fns"
@@ -10,12 +10,13 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, FileText, ExternalLink, Loader2, Edit } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { DateRangeFilter, DateRangePresets } from "@/components/date-range-filter"
 import { ExpenseSummary } from "@/components/expense-summary"
 import { HeaderWithLogout } from "@/components/header-with-logout"
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog"
 import { toast } from "@/components/ui/use-toast"
 import { Toaster } from "@/components/ui/toaster"
+import ExpenseFilters from "@/components/expenses/expense-filters"
+import type { DateRange } from "react-day-picker"
 
 export default function ExpensesListPage() {
   const [expenses, setExpenses] = useState<any[]>([])
@@ -30,20 +31,115 @@ export default function ExpensesListPage() {
     pagados: 0,
   })
   const [loading, setLoading] = useState(true)
-  const [currentFilter, setCurrentFilter] = useState<DateFilter>({})
+  const [filters, setFilters] = useState({
+    dateRange: null as DateRange | null,
+    tribe: "",
+    room: "",
+    supplier: "",
+    category: "",
+    paymentMethod: "",
+    status: "",
+    search: "",
+  })
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    loadData(currentFilter)
+    loadData()
   }, [])
 
-  const loadData = async (filters?: DateFilter) => {
+  useEffect(() => {
+    loadData()
+  }, [filters])
+
+  const loadData = async () => {
     setLoading(true)
     setError(null)
     try {
-      // Wrap each promise in a try/catch to handle individual failures
-      let expensesData: any[] = []
-      let summaryData = {
+      // Convertir filtros de UI a formato para la API
+      const apiFilters: DateFilter = {}
+
+      if (filters.dateRange?.from) {
+        apiFilters.startDate = format(filters.dateRange.from, "yyyy-MM-dd")
+      }
+
+      if (filters.dateRange?.to) {
+        apiFilters.endDate = format(filters.dateRange.to, "yyyy-MM-dd")
+      }
+
+      // Obtener datos de gastos
+      let expensesData = await getExpenses(apiFilters)
+
+      // Aplicar filtros adicionales en el cliente
+      if (expensesData && expensesData.length > 0) {
+        // Filtrar por tribu
+        if (filters.tribe && filters.tribe !== "all") {
+          expensesData = expensesData.filter(
+            (expense) => expense.tribe_id && expense.tribe_id.toString() === filters.tribe,
+          )
+        }
+
+        // Filtrar por habitación
+        if (filters.room && filters.room !== "all") {
+          expensesData = expensesData.filter(
+            (expense) => expense.room_id && expense.room_id.toString() === filters.room,
+          )
+        }
+
+        // Filtrar por proveedor
+        if (filters.supplier && filters.supplier !== "all") {
+          expensesData = expensesData.filter(
+            (expense) => expense.supplier_id && expense.supplier_id.toString() === filters.supplier,
+          )
+        }
+
+        // Filtrar por categoría
+        if (filters.category && filters.category !== "all") {
+          expensesData = expensesData.filter(
+            (expense) => expense.category_id && expense.category_id.toString() === filters.category,
+          )
+        }
+
+        // Filtrar por método de pago
+        if (filters.paymentMethod && filters.paymentMethod !== "all") {
+          expensesData = expensesData.filter((expense) => expense.payment_method === filters.paymentMethod)
+        }
+
+        // Filtrar por estado
+        if (filters.status && filters.status !== "all") {
+          expensesData = expensesData.filter((expense) => expense.status === filters.status)
+        }
+
+        // Filtrar por búsqueda de texto
+        if (filters.search) {
+          const searchLower = filters.search.toLowerCase()
+          expensesData = expensesData.filter(
+            (expense) =>
+              (expense.suppliers?.name && expense.suppliers.name.toLowerCase().includes(searchLower)) ||
+              (expense.expense_categories?.name &&
+                expense.expense_categories.name.toLowerCase().includes(searchLower)) ||
+              (expense.invoice_number && expense.invoice_number.toLowerCase().includes(searchLower)) ||
+              (expense.description && expense.description.toLowerCase().includes(searchLower)),
+          )
+        }
+      }
+
+      // Calcular resumen basado en los datos filtrados
+      const summaryData = calculateSummary(expensesData)
+
+      setExpenses(expensesData || [])
+      setSummary(summaryData)
+    } catch (error) {
+      console.error("Error al cargar los datos:", error)
+      setError("Ha ocurrido un error al cargar los datos. Por favor, intente nuevamente.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Función para calcular el resumen basado en los datos filtrados
+  const calculateSummary = (data: any[]) => {
+    if (!data || data.length === 0) {
+      return {
         total: 0,
         count: 0,
         efectivo: 0,
@@ -53,44 +149,47 @@ export default function ExpensesListPage() {
         pendientes: 0,
         pagados: 0,
       }
-
-      try {
-        expensesData = await getExpenses(filters)
-        console.log("Expenses data loaded:", expensesData.length, "records")
-      } catch (expensesError) {
-        console.error("Error loading expenses data:", expensesError)
-        setError("Error al cargar los gastos. Por favor, intente nuevamente.")
-      }
-
-      try {
-        summaryData = await getExpensesSummary(filters)
-        console.log("Summary data loaded successfully")
-      } catch (summaryError) {
-        console.error("Error loading summary data:", summaryError)
-        // Continue with default summary values
-      }
-
-      setExpenses(expensesData || [])
-      setSummary(summaryData)
-    } catch (error) {
-      console.error("Error general al cargar los datos:", error)
-      setError("Ha ocurrido un error al cargar los datos. Por favor, intente nuevamente.")
-    } finally {
-      setLoading(false)
     }
-  }
 
-  const handleFilter = (filter: DateFilter) => {
-    setCurrentFilter(filter)
-    loadData(filter)
-  }
+    return data.reduce(
+      (summary, expense) => {
+        const amount = Number(expense?.amount || 0)
 
-  const handlePresetFilter = (preset: string) => {
-    // La lógica de filtrado por presets está en el componente
-    const dateRangeFilter = document.querySelector("date-range-filter") as any
-    if (dateRangeFilter && dateRangeFilter.applyPresetFilter) {
-      dateRangeFilter.applyPresetFilter(preset)
-    }
+        // Incrementar total y contador
+        summary.total += amount
+        summary.count += 1
+
+        // Incrementar por método de pago
+        if (expense.payment_method === "efectivo") {
+          summary.efectivo += amount
+        } else if (expense.payment_method === "tarjeta_credito") {
+          summary.tarjeta += amount
+        } else if (expense.payment_method === "transferencia") {
+          summary.transferencia += amount
+        } else if (expense.payment_method === "tarjeta_debito") {
+          summary.debito += amount
+        }
+
+        // Incrementar por estado
+        if (expense.status === "pendiente") {
+          summary.pendientes += amount
+        } else if (expense.status === "pagado") {
+          summary.pagados += amount
+        }
+
+        return summary
+      },
+      {
+        total: 0,
+        count: 0,
+        efectivo: 0,
+        tarjeta: 0,
+        transferencia: 0,
+        debito: 0,
+        pendientes: 0,
+        pagados: 0,
+      },
+    )
   }
 
   const handleDelete = async (id: number) => {
@@ -103,7 +202,7 @@ export default function ExpensesListPage() {
           description: "El gasto ha sido eliminado correctamente.",
         })
         // Recargar los datos
-        loadData(currentFilter)
+        loadData()
       } else {
         toast({
           title: "Error",
@@ -223,11 +322,10 @@ export default function ExpensesListPage() {
         <Card>
           <CardHeader>
             <CardTitle>Filtros</CardTitle>
-            <CardDescription>Filtra los gastos por rango de fechas</CardDescription>
+            <CardDescription>Filtra los gastos por diferentes criterios</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <DateRangeFilter onFilter={handleFilter} />
-            <DateRangePresets onSelectPreset={handlePresetFilter} />
+            <ExpenseFilters filters={filters} setFilters={setFilters} />
           </CardContent>
         </Card>
 
@@ -237,7 +335,7 @@ export default function ExpensesListPage() {
             <CardContent className="p-4">
               <div className="flex items-center text-red-600">
                 <p>{error}</p>
-                <Button variant="outline" size="sm" className="ml-auto" onClick={() => loadData(currentFilter)}>
+                <Button variant="outline" size="sm" className="ml-auto" onClick={() => loadData()}>
                   Reintentar
                 </Button>
               </div>
