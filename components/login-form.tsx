@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
-import Image from "next/image"
 import { signInWithEmail } from "@/lib/auth-client"
 
 export default function LoginForm() {
@@ -43,11 +42,8 @@ export default function LoginForm() {
 
   return (
     <Card className="w-full max-w-md">
-      <CardHeader className="space-y-1 flex flex-col items-center">
-        <div className="relative w-20 h-20 mb-4 rounded-full overflow-hidden bg-gray-100">
-          <Image src="/images/nexus-logo.webp" alt="Nexus Logo" fill sizes="80px" priority className="object-cover" />
-        </div>
-        <CardTitle className="text-2xl text-center">Nexus Co-living</CardTitle>
+      <CardHeader className="space-y-1">
+        <CardTitle className="text-2xl text-center">Iniciar Sesión</CardTitle>
         <CardDescription className="text-center">Ingresa tus credenciales para acceder al sistema</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
