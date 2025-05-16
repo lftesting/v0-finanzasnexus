@@ -3,86 +3,72 @@
 import type React from "react"
 
 import { useState } from "react"
-import { signInWithEmail } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, AlertCircle } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 import Image from "next/image"
+import { signInWithEmail } from "@/lib/auth-client"
 
 export default function LoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+    setLoading(true)
     setError(null)
 
     try {
-      console.log("Iniciando sesión con:", email)
-      const { error, success } = await signInWithEmail(email, password)
+      const { error } = await signInWithEmail(email, password)
 
       if (error) {
-        console.error("Error de inicio de sesión:", error)
-        setError(
-          error.message === "Invalid login credentials"
-            ? "Credenciales inválidas. Por favor, verifica tu email y contraseña."
-            : error.message,
-        )
+        setError(error.message)
         return
       }
 
-      if (success) {
-        console.log("Inicio de sesión exitoso, redirigiendo...")
-
-        // Redirigir a la página principal
-        window.location.href = "/"
-      }
-    } catch (err) {
-      console.error("Error inesperado al iniciar sesión:", err)
-      setError("Ha ocurrido un error al iniciar sesión. Por favor, intenta de nuevo.")
+      // Redirigir a la página principal
+      window.location.href = "/"
+    } catch (error) {
+      console.error("Error al iniciar sesión:", error)
+      setError("Ocurrió un error al iniciar sesión")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader className="space-y-4 items-center text-center">
-        <div className="mx-auto">
-          <Image src="/images/nexus-logo.webp" alt="Nexus Logo" width={80} height={80} className="rounded-full" />
+    <Card className="w-full max-w-md">
+      <CardHeader className="space-y-1 flex flex-col items-center">
+        <div className="relative w-20 h-20 mb-4 rounded-full overflow-hidden bg-gray-100">
+          <Image src="/images/nexus-logo.webp" alt="Nexus Logo" fill sizes="80px" priority className="object-cover" />
         </div>
-        <div>
-          <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>
-          <CardDescription>Ingresa tus credenciales para acceder al sistema</CardDescription>
-        </div>
+        <CardTitle className="text-2xl text-center">Nexus Co-living</CardTitle>
+        <CardDescription className="text-center">Ingresa tus credenciales para acceder al sistema</CardDescription>
       </CardHeader>
-      <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-6 pt-6">
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
+      <CardContent className="space-y-4">
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Correo electrónico</Label>
             <Input
               id="email"
               type="email"
-              placeholder="tu@email.com"
+              placeholder="correo@ejemplo.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
             />
           </div>
-
           <div className="space-y-2">
             <Label htmlFor="password">Contraseña</Label>
             <Input
@@ -93,20 +79,16 @@ export default function LoginForm() {
               required
             />
           </div>
-        </CardContent>
-        <CardFooter>
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Iniciando sesión...
-              </>
-            ) : (
-              "Iniciar Sesión"
-            )}
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Iniciando sesión..." : "Iniciar sesión"}
           </Button>
-        </CardFooter>
-      </form>
+        </form>
+      </CardContent>
+      <CardFooter>
+        <p className="text-xs text-center w-full text-muted-foreground">
+          Sistema de Gestión Financiera para Nexus Co-living
+        </p>
+      </CardFooter>
     </Card>
   )
 }

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { signOut } from "@/lib/auth-client"
 import { LogOut } from "lucide-react"
 import Image from "next/image"
+import Link from "next/link"
 import { BackToHomeButton } from "./back-to-home-button"
 
 interface HeaderWithLogoutProps {
@@ -23,7 +24,11 @@ export function HeaderWithLogout({ title, children, showBackButton = true }: Hea
   return (
     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
       <div className="flex items-center">
-        <Image src="/images/nexus-logo.webp" alt="Nexus Logo" width={40} height={40} className="mr-3 rounded-full" />
+        <Link href="/">
+          <div className="relative w-10 h-10 mr-3 rounded-full overflow-hidden bg-gray-100">
+            <Image src="/images/nexus-logo.webp" alt="Nexus Logo" fill sizes="40px" priority className="object-cover" />
+          </div>
+        </Link>
         <h1 className="text-2xl font-bold">{title}</h1>
       </div>
       <div className="flex flex-wrap items-center gap-2">
