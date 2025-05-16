@@ -1,5 +1,5 @@
 import { FeatureBox } from "@/components/feature-box"
-import { CreditCard, Receipt, Building2 } from "lucide-react"
+import { CreditCard, Receipt, Building2, BarChart4 } from "lucide-react"
 import Link from "next/link"
 import { UserProfileIcon } from "@/components/user-profile-icon"
 import { AuthDebugPanel } from "@/components/auth-debug-panel"
@@ -52,7 +52,7 @@ export default function Home() {
 
         <div className="mt-16 text-center">
           <h2 className="text-2xl font-bold mb-8">Acceso Rápido a Reportes</h2>
-          <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
             <Link
               href="/payments"
               className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow flex items-center justify-center space-x-3"
@@ -66,6 +66,13 @@ export default function Home() {
             >
               <Receipt className="h-5 w-5 text-orange-600" />
               <span>Ver Historial de Gastos</span>
+            </Link>
+            <Link
+              href="/dashboard"
+              className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow flex items-center justify-center space-x-3 border-t-4 border-blue-500"
+            >
+              <BarChart4 className="h-5 w-5 text-blue-600" />
+              <span>Dashboard Analítico</span>
             </Link>
           </div>
         </div>
