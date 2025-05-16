@@ -1,59 +1,33 @@
 "use server"
 
-import { createServerSupabaseClient } from "@/lib/server-utils"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
 
 // Función para guardar la sesión del usuario actual en la base de datos
 export async function storeUserSession(sessionId: string, userId: string, email: string) {
-  const supabase = createServerSupabaseClient()
-
-  // Extraer el nombre de usuario del email
-  const username = email.split("@")[0]
-  const formattedUsername = username.charAt(0).toUpperCase() + username.slice(1)
-
   try {
-    // Verificar si ya existe una sesión con este ID
-    const { data: existingSession } = await supabase
-      .from("current_user_sessions")
-      .select("id")
-      .eq("session_id", sessionId)
-      .single()
+    const supabase = createServerSupabaseClient()
 
-    if (existingSession) {
-      // Actualizar la sesión existente
-      const { error } = await supabase
-        .from("current_user_sessions")
-        .update({
-          user_id: userId,
-          email,
-          username: formattedUsername,
-          created_at: new Date().toISOString(),
-        })
-        .eq("session_id", sessionId)
+    // Extraer nombre de usuario del email
+    const username = email.split("@")[0]
+    const formattedUsername = username.charAt(0).toUpperCase() + username.slice(1)
 
-      if (error) {
-        console.error("Error al actualizar la sesión de usuario:", error)
-        return false
-      }
-    } else {
-      // Crear una nueva sesión
-      const { error } = await supabase.from("current_user_sessions").insert([
-        {
-          session_id: sessionId,
-          user_id: userId,
-          email,
-          username: formattedUsername,
-        },
-      ])
+    // Insertar en la tabla current_user_sessions
+    const { error } = await supabase.from("current_user_sessions").insert({
+      session_id: sessionId,
+      user_id: userId,
+      email: email,
+      username: formattedUsername,
+      created_at: new Date().toISOString(),
+    })
 
-      if (error) {
-        console.error("Error al guardar la sesión de usuario:", error)
-        return false
-      }
+    if (error) {
+      console.error("Error al almacenar la sesión del usuario:", error)
+      return false
     }
 
     return true
   } catch (error) {
-    console.error("Error al gestionar la sesión de usuario:", error)
+    console.error("Error al almacenar la sesión del usuario:", error)
     return false
   }
 }

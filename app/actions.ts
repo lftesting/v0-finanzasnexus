@@ -134,121 +134,52 @@ export async function createPayment(formData: FormData) {
 }
 
 export async function getTribes(): Promise<Tribe[]> {
-  const supabase = createServerSupabaseClient()
-  const { data, error } = await supabase.from("tribes").select("*").order("name")
+  try {
+    const supabase = createServerSupabaseClient()
+    console.log("Obteniendo tribus...")
 
-  if (error) {
-    console.error("Error al obtener las tribus:", error)
+    const { data, error } = await supabase.from("tribes").select("*").order("name")
+
+    if (error) {
+      console.error("Error al obtener las tribus:", error)
+      return []
+    }
+
+    console.log(`Se encontraron ${data?.length || 0} tribus`)
+    return data || []
+  } catch (error) {
+    console.error("Error en getTribes:", error)
     return []
   }
-
-  return data || []
 }
 
 export async function getRoomsByTribe(tribeId: number): Promise<Room[]> {
-  const supabase = createServerSupabaseClient()
-  const { data, error } = await supabase.from("rooms").select("*").eq("tribe_id", tribeId).order("room_number")
+  try {
+    const supabase = createServerSupabaseClient()
+    console.log(`Obteniendo habitaciones para la tribu ${tribeId}...`)
 
-  if (error) {
-    console.error("Error al obtener las habitaciones:", error)
+    const { data, error } = await supabase.from("rooms").select("*").eq("tribe_id", tribeId).order("room_number")
+
+    if (error) {
+      console.error("Error al obtener las habitaciones:", error)
+      return []
+    }
+
+    console.log(`Se encontraron ${data?.length || 0} habitaciones para la tribu ${tribeId}`)
+    return data || []
+  } catch (error) {
+    console.error("Error en getRoomsByTribe:", error)
     return []
   }
-
-  return data || []
 }
 
 export async function getPayments(filters?: DateFilter) {
-  const supabase = createServerSupabaseClient()
+  try {
+    console.log("Iniciando getPayments con filtros:", filters)
+    const supabase = createServerSupabaseClient()
+    console.log("Cliente Supabase creado correctamente")
 
-  let query = supabase.from("payments").select(`
-    *,
-    tribes (
-      name
-    ),
-    rooms (
-      room_number
-    )
-  `)
-
-  if (filters) {
-    const { startDate, endDate, filterField } = filters
-    if (startDate) {
-      query = query.gte(filterField || "entry_date", startDate)
-    }
-    if (endDate) {
-      query = query.lte(filterField || "entry_date", endDate)
-    }
-  }
-
-  query = query.order("entry_date", { ascending: false })
-
-  const { data, error } = await query
-
-  if (error) {
-    console.error("Error getting payments:", error)
-    return []
-  }
-
-  return data
-}
-
-export async function getPaymentsSummary(filters?: DateFilter) {
-  const supabase = createServerSupabaseClient()
-
-  let query = supabase.from("payments").select(`
-    amount,
-    payment_method
-  `)
-
-  if (filters) {
-    const { startDate, endDate, filterField } = filters
-    if (startDate) {
-      query = query.gte(filterField || "entry_date", startDate)
-    }
-    if (endDate) {
-      query = query.lte(filterField || "entry_date", endDate)
-    }
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    console.error("Error getting payments summary:", error)
-    return {
-      total: 0,
-      count: 0,
-      efectivo: 0,
-      transferencia: 0,
-    }
-  }
-
-  let total = 0
-  let efectivo = 0
-  let transferencia = 0
-
-  data.forEach((payment) => {
-    total += payment.amount
-    if (payment.payment_method === "efectivo") {
-      efectivo += payment.amount
-    } else {
-      transferencia += payment.amount
-    }
-  })
-
-  return {
-    total,
-    count: data.length,
-    efectivo,
-    transferencia,
-  }
-}
-
-export async function getPaymentById(id: number) {
-  const supabase = createServerSupabaseClient()
-
-  const { data, error } = await supabase
-    .from("payments")
-    .select(`
+    let query = supabase.from("payments").select(`
       *,
       tribes (
         name
@@ -257,15 +188,124 @@ export async function getPaymentById(id: number) {
         room_number
       )
     `)
-    .eq("id", id)
-    .single()
 
-  if (error) {
-    console.error("Error getting payment by id:", error)
+    if (filters) {
+      const { startDate, endDate, filterField } = filters
+      if (startDate) {
+        query = query.gte(filterField || "entry_date", startDate)
+      }
+      if (endDate) {
+        query = query.lte(filterField || "entry_date", endDate)
+      }
+    }
+
+    query = query.order("entry_date", { ascending: false })
+
+    console.log("Ejecutando consulta de pagos...")
+    const { data, error } = await query
+
+    if (error) {
+      console.error("Error al obtener pagos:", error)
+      return []
+    }
+
+    console.log(`Se encontraron ${data?.length || 0} pagos`)
+    return data || []
+  } catch (error) {
+    console.error("Error en getPayments:", error)
+    return []
+  }
+}
+
+export async function getPaymentsSummary(filters?: DateFilter) {
+  try {
+    const supabase = createServerSupabaseClient()
+
+    let query = supabase.from("payments").select(`
+      amount,
+      payment_method
+    `)
+
+    if (filters) {
+      const { startDate, endDate, filterField } = filters
+      if (startDate) {
+        query = query.gte(filterField || "entry_date", startDate)
+      }
+      if (endDate) {
+        query = query.lte(filterField || "entry_date", endDate)
+      }
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error("Error al obtener resumen de pagos:", error)
+      return {
+        total: 0,
+        count: 0,
+        efectivo: 0,
+        transferencia: 0,
+      }
+    }
+
+    let total = 0
+    let efectivo = 0
+    let transferencia = 0
+
+    data.forEach((payment) => {
+      total += payment.amount
+      if (payment.payment_method === "efectivo") {
+        efectivo += payment.amount
+      } else {
+        transferencia += payment.amount
+      }
+    })
+
+    return {
+      total,
+      count: data.length,
+      efectivo,
+      transferencia,
+    }
+  } catch (error) {
+    console.error("Error en getPaymentsSummary:", error)
+    return {
+      total: 0,
+      count: 0,
+      efectivo: 0,
+      transferencia: 0,
+    }
+  }
+}
+
+export async function getPaymentById(id: number) {
+  try {
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await supabase
+      .from("payments")
+      .select(`
+        *,
+        tribes (
+          name
+        ),
+        rooms (
+          room_number
+        )
+      `)
+      .eq("id", id)
+      .single()
+
+    if (error) {
+      console.error("Error al obtener pago por ID:", error)
+      return null
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error en getPaymentById:", error)
     return null
   }
-
-  return data
 }
 
 // Modificar la función updatePayment para incluir los nuevos campos
@@ -387,15 +427,20 @@ export async function updatePayment(id: number, formData: FormData) {
 }
 
 export async function deletePayment(id: number) {
-  const supabase = createServerSupabaseClient()
+  try {
+    const supabase = createServerSupabaseClient()
 
-  const { error } = await supabase.from("payments").delete().eq("id", id)
+    const { error } = await supabase.from("payments").delete().eq("id", id)
 
-  if (error) {
-    console.error("Error deleting payment:", error)
-    return { success: false, error: error.message }
+    if (error) {
+      console.error("Error al eliminar pago:", error)
+      return { success: false, error: error.message }
+    }
+
+    revalidatePath("/payments")
+    return { success: true }
+  } catch (error) {
+    console.error("Error en deletePayment:", error)
+    return { success: false, error: "Error al procesar la solicitud" }
   }
-
-  revalidatePath("/payments")
-  return { success: true }
 }

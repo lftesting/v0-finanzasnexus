@@ -1,96 +1,114 @@
-import { FeatureBox } from "@/components/feature-box"
-import { CreditCard, Receipt, Building2, BarChart4 } from "lucide-react"
+import { HeaderWithLogout } from "@/components/header-with-logout"
+import AuthRedirect from "@/components/auth-redirect"
+import { BarChart4, CreditCard, Receipt } from "lucide-react"
 import Link from "next/link"
-import { UserProfileIcon } from "@/components/user-profile-icon"
-import { AuthDebugPanel } from "@/components/auth-debug-panel"
-import { UserInfoDebug } from "@/components/user-info-debug"
+import Image from "next/image"
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-      <div className="container mx-auto py-16 px-4">
-        <div className="flex justify-between items-center mb-16">
-          <div className="flex items-center">
-            <Building2 className="h-8 w-8 mr-2 text-green-600 dark:text-green-400" />
-            <h1 className="text-4xl md:text-5xl font-bold">
-              Nexus <span className="text-green-600 dark:text-green-400">Co-living</span>
-            </h1>
+    <div className="min-h-screen bg-gray-50">
+      <AuthRedirect />
+      <HeaderWithLogout />
+
+      <main className="container mx-auto px-4 py-8">
+        <div className="flex flex-col items-center justify-center mb-8">
+          <Image
+            src="/images/nexus-logo.webp"
+            alt="Nexus Logo"
+            width={120}
+            height={120}
+            className="rounded-full mb-4"
+          />
+          <h1 className="text-3xl font-bold text-center">Bienvenido a Nexus Co-living</h1>
+          <p className="text-gray-600 text-center mt-2">Sistema de gestión de cobros y gastos</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 max-w-4xl mx-auto">
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold mb-4">Gestión de Cobros</h2>
+            <div className="space-y-4">
+              <Link
+                href="/payments/new"
+                className="flex items-center p-3 rounded-md hover:bg-gray-50 transition-colors border border-gray-200"
+              >
+                <CreditCard className="h-5 w-5 mr-3 text-blue-500" />
+                <span>Registrar Nuevo Cobro</span>
+              </Link>
+              <Link
+                href="/payments/list"
+                className="flex items-center p-3 rounded-md hover:bg-gray-50 transition-colors border border-gray-200"
+              >
+                <Receipt className="h-5 w-5 mr-3 text-blue-500" />
+                <span>Ver Historial de Cobros</span>
+              </Link>
+            </div>
           </div>
-          <UserProfileIcon />
+
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold mb-4">Gestión de Gastos</h2>
+            <div className="space-y-4">
+              <Link
+                href="/expenses/new"
+                className="flex items-center p-3 rounded-md hover:bg-gray-50 transition-colors border border-gray-200"
+              >
+                <CreditCard className="h-5 w-5 mr-3 text-red-500" />
+                <span>Registrar Nuevo Gasto</span>
+              </Link>
+              <Link
+                href="/expenses/list"
+                className="flex items-center p-3 rounded-md hover:bg-gray-50 transition-colors border border-gray-200"
+              >
+                <Receipt className="h-5 w-5 mr-3 text-red-500" />
+                <span>Ver Historial de Gastos</span>
+              </Link>
+            </div>
+          </div>
         </div>
 
-        <div className="text-center mb-16">
-          <h2 className="text-3xl font-bold mb-4">Sistema de Gestión Financiera</h2>
-          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-            Administra de manera eficiente los cobros y gastos de tu negocio con nuestro sistema integral
-          </p>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-          {/* Caja de Cobros */}
-          <FeatureBox
-            title="Gestión de Cobros"
-            description="Registra y administra todos los cobros a clientes, con seguimiento de fechas y estados de pago."
-            icon={CreditCard}
-            href="/payments/new"
-            buttonText="Registrar Cobros"
-            className="bg-white dark:bg-gray-800 border-t-4 border-green-500 hover:border-green-600"
-            buttonVariant="default"
-          />
-
-          {/* Caja de Gastos */}
-          <FeatureBox
-            title="Gestión de Gastos"
-            description="Controla todos los gastos y pagos a proveedores, organizados por categorías y con seguimiento de facturas."
-            icon={Receipt}
-            href="/expenses/new"
-            buttonText="Registrar Gastos"
-            className="bg-white dark:bg-gray-800 border-t-4 border-orange-500 hover:border-orange-600"
-            buttonVariant="outline"
-          />
-        </div>
-
-        <div className="mt-16 text-center">
-          <h2 className="text-2xl font-bold mb-8">Acceso Rápido a Reportes</h2>
-          <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
+        <div className="mt-8">
+          <h2 className="text-xl font-semibold mb-4 text-center">Acceso Rápido a Reportes</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
             <Link
-              href="/payments"
-              className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow flex items-center justify-center space-x-3"
+              href="/payments/list"
+              className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border-t-4 border-blue-500"
             >
-              <CreditCard className="h-5 w-5 text-green-600" />
-              <span>Ver Historial de Cobros</span>
+              <div className="flex flex-col items-center">
+                <Receipt className="h-10 w-10 mb-3 text-blue-500" />
+                <h3 className="font-medium text-lg">Ver Historial de Cobros</h3>
+                <p className="text-gray-500 text-sm text-center mt-2">
+                  Consulta todos los cobros registrados en el sistema
+                </p>
+              </div>
             </Link>
+
             <Link
               href="/expenses/list"
-              className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow flex items-center justify-center space-x-3"
+              className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border-t-4 border-red-500"
             >
-              <Receipt className="h-5 w-5 text-orange-600" />
-              <span>Ver Historial de Gastos</span>
+              <div className="flex flex-col items-center">
+                <Receipt className="h-10 w-10 mb-3 text-red-500" />
+                <h3 className="font-medium text-lg">Ver Historial de Gastos</h3>
+                <p className="text-gray-500 text-sm text-center mt-2">
+                  Consulta todos los gastos registrados en el sistema
+                </p>
+              </div>
             </Link>
+
             <Link
               href="/dashboard"
-              className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow flex items-center justify-center space-x-3 border-t-4 border-blue-500"
+              className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border-t-4 border-blue-500"
             >
-              <BarChart4 className="h-5 w-5 text-blue-600" />
-              <span>Dashboard Analítico</span>
+              <div className="flex flex-col items-center">
+                <BarChart4 className="h-10 w-10 mb-3 text-blue-500" />
+                <h3 className="font-medium text-lg">Dashboard Analítico</h3>
+                <p className="text-gray-500 text-sm text-center mt-2">
+                  Visualiza estadísticas y análisis de cobros y gastos
+                </p>
+              </div>
             </Link>
           </div>
         </div>
-
-        <footer className="mt-20 text-center text-gray-500 dark:text-gray-400">
-          <div className="flex items-center justify-center mb-4">
-            <Building2 className="h-6 w-6 mr-2" />
-            <span className="text-lg font-semibold">Nexus Co-living</span>
-          </div>
-          <p>Sistema de Gestión Financiera © {new Date().getFullYear()}</p>
-        </footer>
-      </div>
-
-      {/* Panel de depuración de autenticación mejorado */}
-      <AuthDebugPanel />
-
-      {/* Panel de depuración de información de usuario */}
-      <UserInfoDebug />
-    </main>
+      </main>
+    </div>
   )
 }

@@ -1,20 +1,13 @@
-import { createServerClient } from "@supabase/ssr"
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
+import type { Database } from "@/types/supabase"
 
 export function createServerSupabaseClient() {
-  const cookieStore = cookies()
-
-  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, {
-    cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value
-      },
-      set(name: string, value: string, options: any) {
-        cookieStore.set({ name, value, ...options })
-      },
-      remove(name: string, options: any) {
-        cookieStore.set({ name, value: "", ...options })
-      },
-    },
-  })
+  try {
+    const cookieStore = cookies()
+    return createServerComponentClient<Database>({ cookies: () => cookieStore })
+  } catch (error) {
+    console.error("Error al crear el cliente de Supabase en el servidor:", error)
+    throw error
+  }
 }

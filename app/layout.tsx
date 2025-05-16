@@ -11,6 +11,10 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Nexus Co-living - Sistema de Gestión Financiera",
   description: "Sistema para la gestión de cobros y gastos de Nexus Co-living",
+  icons: {
+    icon: "/images/nexus-logo.webp",
+    apple: "/images/nexus-logo.webp",
+  },
     generator: 'v0.dev'
 }
 

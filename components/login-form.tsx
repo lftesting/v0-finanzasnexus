@@ -3,22 +3,20 @@
 import type React from "react"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/context/auth-context"
+import { signInWithEmail } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, AlertCircle } from "lucide-react"
+import Image from "next/image"
 
 export default function LoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { signIn } = useAuth()
-  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -26,47 +24,28 @@ export default function LoginForm() {
     setError(null)
 
     try {
-      const { error, success } = await signIn(email, password)
+      console.log("Iniciando sesión con:", email)
+      const { error, success } = await signInWithEmail(email, password)
 
       if (error) {
+        console.error("Error de inicio de sesión:", error)
         setError(
           error.message === "Invalid login credentials"
             ? "Credenciales inválidas. Por favor, verifica tu email y contraseña."
             : error.message,
         )
-        setIsLoading(false)
         return
       }
 
       if (success) {
-        // Guardar información del usuario en la tabla user_info
-        try {
-          // Extraer nombre de usuario del email
-          const username = email.split("@")[0]
-          const formattedUsername = username.charAt(0).toUpperCase() + username.slice(1)
+        console.log("Inicio de sesión exitoso, redirigiendo...")
 
-          // Llamar a la API para guardar la información
-          await fetch("/api/auth/save-user-info", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              email,
-              username: formattedUsername,
-            }),
-          })
-        } catch (saveError) {
-          console.error("Error al guardar información de usuario:", saveError)
-          // Continuar con la redirección aunque falle el guardado
-        }
-
-        // Redirigir inmediatamente sin temporizador
-        router.push("/")
+        // Redirigir a la página principal
+        window.location.href = "/"
       }
     } catch (err) {
+      console.error("Error inesperado al iniciar sesión:", err)
       setError("Ha ocurrido un error al iniciar sesión. Por favor, intenta de nuevo.")
-      console.error("Error al iniciar sesión:", err)
     } finally {
       setIsLoading(false)
     }
@@ -74,9 +53,14 @@ export default function LoginForm() {
 
   return (
     <Card className="w-full max-w-md mx-auto">
-      <CardHeader className="bg-gradient-to-r from-blue-500 to-indigo-700 text-white">
-        <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>
-        <CardDescription className="text-gray-100">Ingresa tus credenciales para acceder al sistema</CardDescription>
+      <CardHeader className="space-y-4 items-center text-center">
+        <div className="mx-auto">
+          <Image src="/images/nexus-logo.webp" alt="Nexus Logo" width={80} height={80} className="rounded-full" />
+        </div>
+        <div>
+          <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>
+          <CardDescription>Ingresa tus credenciales para acceder al sistema</CardDescription>
+        </div>
       </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-6 pt-6">

@@ -10,7 +10,32 @@ export async function middleware(req: NextRequest) {
   const supabase = createMiddlewareClient({ req, res })
 
   // Refrescar la sesión si existe
-  await supabase.auth.getSession()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  // Registrar el estado de autenticación para depuración
+  console.log("Estado de autenticación:", {
+    user: session?.user
+      ? {
+          id: session.user.id,
+          email: session.user.email,
+        }
+      : null,
+    pathname: req.nextUrl.pathname,
+  })
+
+  // Si no hay sesión y no estamos en la página de login, redirigir a login
+  if (!session && req.nextUrl.pathname !== "/login") {
+    const loginUrl = new URL("/login", req.url)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  // Si hay sesión y estamos en la página de login, redirigir a la página principal
+  if (session && req.nextUrl.pathname === "/login") {
+    const homeUrl = new URL("/", req.url)
+    return NextResponse.redirect(homeUrl)
+  }
 
   // Permitir que la solicitud continúe
   return res

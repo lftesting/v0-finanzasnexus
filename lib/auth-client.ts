@@ -1,31 +1,12 @@
 "use client"
 
-import { createClientSupabaseClient } from "@/lib/supabase"
-
-// Función para obtener el cliente de Supabase solo en el navegador
-const getSupabaseClient = () => {
-  if (typeof window === "undefined") {
-    console.warn("Intentando usar getSupabaseClient en el servidor")
-    // Devolver un cliente simulado para evitar errores
-    // @ts-ignore
-    return {
-      auth: {
-        getSession: () => Promise.resolve({ data: { session: null }, error: null }),
-        signInWithPassword: () => Promise.resolve({ data: { user: null, session: null }, error: null }),
-        signOut: () => Promise.resolve({ error: null }),
-      },
-    }
-  }
-
-  return createClientSupabaseClient()
-}
+import { createClientSupabaseClient } from "@/lib/supabase/client"
 
 // Funciones de autenticación para el lado del cliente
 export const getClientSession = async () => {
-  const supabase = getSupabaseClient()
+  const supabase = createClientSupabaseClient()
 
   try {
-    // Forzar la actualización de la sesión
     const { data, error } = await supabase.auth.getSession()
 
     if (error) {
@@ -47,7 +28,7 @@ export const getClientSession = async () => {
 }
 
 export const signInWithEmail = async (email: string, password: string) => {
-  const supabase = getSupabaseClient()
+  const supabase = createClientSupabaseClient()
 
   try {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -61,9 +42,6 @@ export const signInWithEmail = async (email: string, password: string) => {
 
     console.log("Inicio de sesión exitoso:", data.user?.email)
 
-    // Forzar la actualización de la sesión
-    await supabase.auth.getSession()
-
     return { error: null, success: true, user: data.user }
   } catch (error) {
     console.error("Error al iniciar sesión:", error)
@@ -72,11 +50,17 @@ export const signInWithEmail = async (email: string, password: string) => {
 }
 
 export const signOut = async () => {
-  const supabase = getSupabaseClient()
+  const supabase = createClientSupabaseClient()
 
   try {
-    await supabase.auth.signOut()
-    console.log("Sesión cerrada")
+    const { error } = await supabase.auth.signOut()
+
+    if (error) {
+      console.error("Error al cerrar sesión:", error)
+      return { success: false, error }
+    }
+
+    console.log("Sesión cerrada correctamente")
     return { success: true }
   } catch (error) {
     console.error("Error al cerrar sesión:", error)
