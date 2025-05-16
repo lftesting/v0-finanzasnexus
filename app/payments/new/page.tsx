@@ -1,21 +1,24 @@
 import PaymentForm from "@/components/payment-form"
+import { HeaderWithLogout } from "@/components/header-with-logout"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ListFilter } from "lucide-react"
-import { HeaderWithLogout } from "@/components/header-with-logout"
+import { AuthGuard } from "@/components/auth-guard"
 
 export default function NewPaymentPage() {
   return (
-    <main className="container mx-auto py-10 px-4">
-      <HeaderWithLogout title="Registro de Cobros">
-        <Link href="/payments">
-          <Button>
-            <ListFilter className="mr-2 h-4 w-4" />
-            Ver cobros registrados
-          </Button>
-        </Link>
-      </HeaderWithLogout>
-      <PaymentForm />
-    </main>
+    <AuthGuard>
+      <div className="container mx-auto py-6 space-y-6">
+        <HeaderWithLogout title="Registro de Cobros">
+          <Link href="/payments/list">
+            <Button variant="outline">
+              <ListFilter className="mr-2 h-4 w-4" />
+              Ver Historial
+            </Button>
+          </Link>
+        </HeaderWithLogout>
+        <PaymentForm />
+      </div>
+    </AuthGuard>
   )
 }

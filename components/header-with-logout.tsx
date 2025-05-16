@@ -1,41 +1,39 @@
 "use client"
 
-import { useState } from "react"
+import type React from "react"
+
 import { Button } from "@/components/ui/button"
-import { LogOut } from "lucide-react"
 import { signOut } from "@/lib/auth-client"
-import { useRouter } from "next/navigation"
+import { LogOut } from "lucide-react"
 import Image from "next/image"
-import Link from "next/link"
+import { BackToHomeButton } from "./back-to-home-button"
 
-export function HeaderWithLogout() {
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const router = useRouter()
+interface HeaderWithLogoutProps {
+  title: string
+  children?: React.ReactNode
+  showBackButton?: boolean
+}
 
+export function HeaderWithLogout({ title, children, showBackButton = true }: HeaderWithLogoutProps) {
   const handleLogout = async () => {
-    setIsLoggingOut(true)
-    try {
-      await signOut()
-      window.location.href = "/login" // Usar window.location en lugar de router para forzar una recarga completa
-    } catch (error) {
-      console.error("Error al cerrar sesión:", error)
-    } finally {
-      setIsLoggingOut(false)
-    }
+    await signOut()
+    window.location.href = "/login"
   }
 
   return (
-    <header className="bg-white shadow-sm">
-      <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-        <Link href="/" className="flex items-center space-x-2">
-          <Image src="/images/nexus-logo.webp" alt="Nexus Logo" width={40} height={40} className="rounded-full" />
-          <h1 className="text-xl font-bold">Nexus Co-living</h1>
-        </Link>
-        <Button variant="outline" size="sm" onClick={handleLogout} disabled={isLoggingOut}>
-          <LogOut className="h-4 w-4 mr-2" />
-          Cerrar Sesión
+    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+      <div className="flex items-center">
+        <Image src="/images/nexus-logo.webp" alt="Nexus Logo" width={40} height={40} className="mr-3 rounded-full" />
+        <h1 className="text-2xl font-bold">{title}</h1>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {showBackButton && <BackToHomeButton />}
+        {children}
+        <Button variant="destructive" onClick={handleLogout}>
+          <LogOut className="mr-2 h-4 w-4" />
+          Cerrar sesión
         </Button>
       </div>
-    </header>
+    </div>
   )
 }
