@@ -25,9 +25,7 @@ export function HeaderWithLogout({ title, children, showBackButton = true }: Hea
     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
       <div className="flex items-center">
         <Link href="/">
-          <div className="relative w-10 h-10 mr-3 rounded-full overflow-hidden bg-gray-100">
-            <Image src="/images/nexus-logo.webp" alt="Nexus Logo" fill sizes="40px" priority className="object-cover" />
-          </div>
+          <Image src="/images/nexus-logo.webp" alt="Nexus Logo" width={40} height={40} className="mr-3 rounded-full" />
         </Link>
         <h1 className="text-2xl font-bold">{title}</h1>
       </div>

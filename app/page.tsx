@@ -11,16 +11,14 @@ export default function Home() {
 
         <main>
           <div className="flex flex-col items-center justify-center mb-8">
-            <div className="relative w-32 h-32 mb-4 rounded-full overflow-hidden bg-gray-100">
-              <Image
-                src="/images/nexus-logo.webp"
-                alt="Nexus Logo"
-                fill
-                sizes="128px"
-                priority
-                className="object-cover"
-              />
-            </div>
+            <Image
+              src="/images/nexus-logo.webp"
+              alt="Nexus Logo"
+              width={120}
+              height={120}
+              className="mb-4 rounded-full"
+              priority
+            />
             <h2 className="text-3xl font-bold text-center">Bienvenido a Nexus Co-living</h2>
             <p className="text-gray-600 text-center mt-2">Sistema de gestión de cobros y gastos</p>
           </div>
